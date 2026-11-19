@@ -1,19 +1,21 @@
 -- Schema inicial para el Campus del Bootcamp (Supabase / PostgreSQL)
 -- Ejecutar en el SQL Editor de tu proyecto Supabase
 
--- 1. Perfiles / Alumnos (alta, baja, excepciones, vínculo con GitHub y proyecto MVP en Vercel)
+-- 1. Perfiles / Usuarios de la plataforma (estudiantes, profesores + flag booleano independiente de administrador)
 create table if not exists public.alumnos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid unique references auth.users(id) on delete set null,
   nombre text not null,
   email text unique not null,
   github_username text unique not null,
-  rol text not null default 'alumno' check (rol in ('admin', 'alumno')),
+  rol text not null default 'estudiante' check (rol in ('estudiante', 'profesor')),
+  es_admin boolean not null default false,
   estado text not null default 'activo' check (estado in ('activo', 'atrasado', 'baja')),
   nota_excepcion text,
   mvp_titulo text,
   mvp_url text,
   mvp_repo_url text,
+  mvp_api_url text,
   created_at timestamptz not null default now()
 );
 
@@ -33,7 +35,7 @@ create table if not exists public.clases (
   gcal_event_id text
 );
 
--- 3. Entregas semanales por alumno (cruza PRs de GitHub + prórrogas/excepciones)
+-- 3. Entregas semanales por estudiante (cruza PRs de GitHub + prórrogas/excepciones)
 create table if not exists public.entregas (
   id uuid primary key default gen_random_uuid(),
   alumno_id uuid not null references public.alumnos(id) on delete cascade,
@@ -64,64 +66,108 @@ create table if not exists public.examenes (
   unique (alumno_id, hito, es_recuperatorio)
 );
 
+-- Trigger: vincular automáticamente auth.users -> public.alumnos por email al registrarse
+create or replace function public.vincular_alumno_on_auth_signup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.alumnos
+  set user_id = new.id
+  where lower(email) = lower(new.email)
+    and user_id is null;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_vincular_alumno on auth.users;
+create trigger on_auth_user_created_vincular_alumno
+  after insert on auth.users
+  for each row execute function public.vincular_alumno_on_auth_signup();
+
 -- Habilitar Row Level Security (RLS)
 alter table public.alumnos enable row level security;
 alter table public.clases enable row level security;
 alter table public.entregas enable row level security;
 alter table public.examenes enable row level security;
 
--- Helper: verificar si el usuario logueado es admin
+-- Helpers de autorización
 create or replace function public.es_admin()
 returns boolean
 language sql
 security definer
 stable
+set search_path = public
 as $$
   select exists (
     select 1 from public.alumnos
-    where user_id = auth.uid() and rol = 'admin'
+    where user_id = auth.uid() and es_admin = true
+  );
+$$;
+
+create or replace function public.es_profesor_o_admin()
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.alumnos
+    where user_id = auth.uid() and (rol = 'profesor' or es_admin = true)
   );
 $$;
 
 -- Políticas RLS
--- Clases: cualquier usuario autenticado puede verlas; solo admin edita
+-- Clases: cualquier usuario autenticado puede verlas; profesores y admins gestionan
 create policy "clases_select_auth" on public.clases for select to authenticated using (true);
-create policy "clases_admin_all" on public.clases for all to authenticated using (public.es_admin()) with check (public.es_admin());
+create policy "clases_staff_all" on public.clases for all to authenticated
+  using (public.es_profesor_o_admin()) with check (public.es_profesor_o_admin());
 
--- Alumnos: cada alumno ve su propio perfil; admin ve y gestiona todos (alta/baja/excepciones)
-create policy "alumnos_select_self_or_admin" on public.alumnos for select to authenticated using (user_id = auth.uid() or public.es_admin());
-create policy "alumnos_admin_all" on public.alumnos for all to authenticated using (public.es_admin()) with check (public.es_admin());
+-- Alumnos: cada usuario ve su perfil; profesores y admins ven todos; solo admin gestiona altas/bajas/roles
+create policy "alumnos_select_self_or_staff" on public.alumnos for select to authenticated
+  using (user_id = auth.uid() or public.es_profesor_o_admin());
+create policy "alumnos_admin_all" on public.alumnos for all to authenticated
+  using (public.es_admin()) with check (public.es_admin());
 
--- Entregas: cada alumno ve las suyas; admin gestiona todas
-create policy "entregas_select_self_or_admin" on public.entregas for select to authenticated
-  using (public.es_admin() or alumno_id in (select id from public.alumnos where user_id = auth.uid()));
-create policy "entregas_admin_all" on public.entregas for all to authenticated using (public.es_admin()) with check (public.es_admin());
+-- Entregas: cada estudiante ve las suyas; profesores y admins gestionan todas
+create policy "entregas_select_self_or_staff" on public.entregas for select to authenticated
+  using (public.es_profesor_o_admin() or alumno_id in (select id from public.alumnos where user_id = auth.uid()));
+create policy "entregas_staff_all" on public.entregas for all to authenticated
+  using (public.es_profesor_o_admin()) with check (public.es_profesor_o_admin());
 
--- Exámenes: cada alumno ve los suyos; admin gestiona todos
-create policy "examenes_select_self_or_admin" on public.examenes for select to authenticated
-  using (public.es_admin() or alumno_id in (select id from public.alumnos where user_id = auth.uid()));
-create policy "examenes_admin_all" on public.examenes for all to authenticated using (public.es_admin()) with check (public.es_admin());
+-- Exámenes: cada estudiante ve los suyos; profesores y admins gestionan todos
+create policy "examenes_select_self_or_staff" on public.examenes for select to authenticated
+  using (public.es_profesor_o_admin() or alumno_id in (select id from public.alumnos where user_id = auth.uid()));
+create policy "examenes_staff_all" on public.examenes for all to authenticated
+  using (public.es_profesor_o_admin()) with check (public.es_profesor_o_admin());
 
--- Vista segura para la galería de proyectos de la cohorte (sin exponer emails ni notas privadas)
+-- Vista segura para la galería de proyectos de la cohorte (SOLO para usuarios logueados, sin exponer emails ni notas)
 create or replace view public.proyectos_cohorte as
 select
   nombre,
   github_username,
   mvp_titulo,
   mvp_url,
-  mvp_repo_url
+  mvp_repo_url,
+  mvp_api_url
 from public.alumnos
-where rol = 'alumno' and estado <> 'baja' and mvp_url is not null;
+where rol = 'estudiante' and estado <> 'baja' and mvp_url is not null;
+
+revoke all on public.proyectos_cohorte from anon, public;
+grant select on public.proyectos_cohorte to authenticated;
 
 -- Seed inicial de las 13 clases (Clase 0 + Semanas 1 a 12)
 insert into public.clases (numero, titulo, fase, carpeta_repo, estado) values
-  (0,  'Clase 0 — Presentación, Entorno y Primer PR', 0, 'clases/clase-00', 'programada'),
+  (0,  'Clase 0 — Presentación, Entorno, HTML/CSS y Primer PR', 0, 'clases/clase-00', 'programada'),
   (1,  'Semana 1 — TypeScript: Tipos, Condicionales y Bucles', 1, 'clases/semana-01', 'programada'),
   (2,  'Semana 2 — Funciones Tipadas, Interfaces, Arrays y JSON', 1, 'clases/semana-02', 'programada'),
   (3,  'Semana 3 — HTTP, APIs REST y Asincronía', 1, 'clases/semana-03', 'programada'),
   (4,  'Semana 4 — Examen Eliminatorio 1 + Definición de MVP', 1, 'clases/semana-04', 'programada'),
   (5,  'Semana 5 — React + Vite + TypeScript + Tailwind', 2, 'clases/semana-05', 'programada'),
-  (6,  'Semana 6 — Bases de Datos Relacionales y SQL Puro', 2, 'clases/semana-06', 'programada'),
+  (6,  'Semana 6 — Arquitectura de Bases de Datos Relacionales y SQL Puro', 2, 'clases/semana-06', 'programada'),
   (7,  'Semana 7 — Supabase, Custom Hooks y TanStack Query', 2, 'clases/semana-07', 'programada'),
   (8,  'Semana 8 — Examen Eliminatorio 2', 2, 'clases/semana-08', 'programada'),
   (9,  'Semana 9 — Autenticación, Roles, RLS y Zustand', 3, 'clases/semana-09', 'programada'),

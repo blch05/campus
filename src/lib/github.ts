@@ -10,19 +10,14 @@ const GITHUB_API = 'https://api.github.com';
 export const githubConfig = {
   owner: import.meta.env.VITE_GITHUB_OWNER ?? '',
   repo: import.meta.env.VITE_GITHUB_REPO ?? '',
-  token: import.meta.env.VITE_GITHUB_TOKEN ?? '',
 };
 
 export const isGitHubConfigured = Boolean(githubConfig.owner && githubConfig.repo);
 
 function buildHeaders(): HeadersInit {
-  const headers: Record<string, string> = {
+  return {
     Accept: 'application/vnd.github+json',
   };
-  if (githubConfig.token) {
-    headers.Authorization = `Bearer ${githubConfig.token}`;
-  }
-  return headers;
 }
 
 async function fetchGitHub<T>(endpoint: string): Promise<T> {

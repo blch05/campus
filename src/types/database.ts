@@ -1,4 +1,4 @@
-export type RolUsuario = 'admin' | 'alumno';
+export type RolUsuario = 'estudiante' | 'profesor';
 export type EstadoAlumno = 'activo' | 'atrasado' | 'baja';
 export type EstadoClase = 'programada' | 'reprogramada' | 'dictada' | 'cancelada';
 export type EstadoEntrega = 'pendiente' | 'en_revision' | 'aprobada' | 'prorroga' | 'desaprobada';
@@ -12,11 +12,13 @@ export interface Alumno {
   email: string;
   github_username: string;
   rol: RolUsuario;
+  es_admin: boolean;
   estado: EstadoAlumno;
   nota_excepcion: string | null;
   mvp_titulo: string | null;
   mvp_url: string | null;
   mvp_repo_url: string | null;
+  mvp_api_url: string | null;
   created_at: string;
 }
 
@@ -66,4 +68,5 @@ export interface ProyectoCohorte {
   mvp_titulo: string | null;
   mvp_url: string | null;
   mvp_repo_url: string | null;
+  mvp_api_url: string | null;
 }
