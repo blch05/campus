@@ -31,6 +31,7 @@ create table if not exists public.clases (
   modalidad text default '2 hs (Compacto)',
   link_llamada text,
   estado text not null default 'programada' check (estado in ('programada', 'reprogramada', 'dictada', 'cancelada')),
+  desbloqueada boolean not null default false,
   nota_cambio text,
   gcal_event_id text
 );
@@ -159,19 +160,19 @@ where rol = 'estudiante' and estado <> 'baja' and mvp_url is not null;
 revoke all on public.proyectos_cohorte from anon, public;
 grant select on public.proyectos_cohorte to authenticated;
 
--- Seed inicial de las 13 clases (Clase 0 + Semanas 1 a 12)
-insert into public.clases (numero, titulo, fase, carpeta_repo, estado) values
-  (0,  'Clase 0 — Presentación, Entorno, HTML/CSS y Primer PR', 0, 'clases/clase-00', 'programada'),
-  (1,  'Semana 1 — TypeScript: Tipos, Condicionales y Bucles', 1, 'clases/semana-01', 'programada'),
-  (2,  'Semana 2 — Funciones Tipadas, Interfaces, Arrays y JSON', 1, 'clases/semana-02', 'programada'),
-  (3,  'Semana 3 — HTTP, APIs REST y Asincronía', 1, 'clases/semana-03', 'programada'),
-  (4,  'Semana 4 — Examen Eliminatorio 1 + Definición de MVP', 1, 'clases/semana-04', 'programada'),
-  (5,  'Semana 5 — React + Vite + TypeScript + Tailwind', 2, 'clases/semana-05', 'programada'),
-  (6,  'Semana 6 — Arquitectura de Bases de Datos Relacionales y SQL Puro', 2, 'clases/semana-06', 'programada'),
-  (7,  'Semana 7 — Supabase, Custom Hooks y TanStack Query', 2, 'clases/semana-07', 'programada'),
-  (8,  'Semana 8 — Examen Eliminatorio 2', 2, 'clases/semana-08', 'programada'),
-  (9,  'Semana 9 — Autenticación, Roles, RLS y Zustand', 3, 'clases/semana-09', 'programada'),
-  (10, 'Semana 10 — Backend Propio en Node.js + Express + JWT', 3, 'clases/semana-10', 'programada'),
-  (11, 'Semana 11 — Emancipación del MVP, Deploy, Dominios y DNS', 3, 'clases/semana-11', 'programada'),
-  (12, 'Semana 12 — Examen Final y Defensa del MVP', 3, 'clases/semana-12', 'programada')
+-- Seed inicial de las 13 clases (Clase 0 desbloqueada de entrada; Semanas 1 a 12 se desbloquean progresivamente)
+insert into public.clases (numero, titulo, fase, carpeta_repo, estado, desbloqueada) values
+  (0,  'Clase 0 — Presentación, Entorno, HTML/CSS y Primer PR', 0, 'clases/clase-00', 'programada', true),
+  (1,  'Semana 1 — TypeScript: Tipos, Condicionales y Bucles', 1, 'clases/semana-01', 'programada', false),
+  (2,  'Semana 2 — Funciones Tipadas, Interfaces, Arrays y JSON', 1, 'clases/semana-02', 'programada', false),
+  (3,  'Semana 3 — HTTP, APIs REST y Asincronía', 1, 'clases/semana-03', 'programada', false),
+  (4,  'Semana 4 — Examen Eliminatorio 1 + Definición de MVP', 1, 'clases/semana-04', 'programada', false),
+  (5,  'Semana 5 — React + Vite + TypeScript + Tailwind', 2, 'clases/semana-05', 'programada', false),
+  (6,  'Semana 6 — Arquitectura de Bases de Datos Relacionales y SQL Puro', 2, 'clases/semana-06', 'programada', false),
+  (7,  'Semana 7 — Supabase, Custom Hooks y TanStack Query', 2, 'clases/semana-07', 'programada', false),
+  (8,  'Semana 8 — Examen Eliminatorio 2', 2, 'clases/semana-08', 'programada', false),
+  (9,  'Semana 9 — Autenticación, Roles, RLS y Zustand', 3, 'clases/semana-09', 'programada', false),
+  (10, 'Semana 10 — Backend Propio en Node.js + Express + JWT', 3, 'clases/semana-10', 'programada', false),
+  (11, 'Semana 11 — Emancipación del MVP, Deploy, Dominios y DNS', 3, 'clases/semana-11', 'programada', false),
+  (12, 'Semana 12 — Examen Final y Defensa del MVP', 3, 'clases/semana-12', 'programada', false)
 on conflict (numero) do nothing;

@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_GITHUB_OWNER?: string;
   readonly VITE_GITHUB_REPO?: string;
+  readonly VITE_CUSTOM_DOMAIN?: string;
 }
 
 interface ImportMeta {

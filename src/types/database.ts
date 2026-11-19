@@ -33,6 +33,7 @@ export interface Clase {
   modalidad: string | null;
   link_llamada: string | null;
   estado: EstadoClase;
+  desbloqueada: boolean;
   nota_cambio: string | null;
   gcal_event_id: string | null;
 }
