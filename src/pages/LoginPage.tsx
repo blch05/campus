@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -60,44 +60,42 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-xl">
-        <div className="flex items-center gap-2 text-indigo-400">
-          <GraduationCap className="h-7 w-7" />
-          <span className="text-lg font-bold text-white">Campus Bootcamp Web TS</span>
-        </div>
-
-        <h1 className="mt-4 text-2xl font-bold text-white">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-canvas)] px-4 text-[var(--text-primary)]">
+      <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-8">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Bootcamp Web TS
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--text-primary)]">
           {modo === 'login' ? 'Iniciar sesión' : 'Activar tu cuenta'}
         </h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {modo === 'login'
             ? 'Ingresá con el email registrado en la cohorte.'
-            : 'Usá el mismo email que le pasaste al instructor para vincular tu perfil automáticamente.'}
+            : 'Usá el mismo email que le pasaste al instructor para vincular tu perfil.'}
         </p>
 
         {!isSupabaseConfigured && (
-          <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <div className="mt-4 rounded-md border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] p-3 text-xs text-[var(--status-warn-fg)]">
             Faltan <code>VITE_SUPABASE_URL</code> y <code>VITE_SUPABASE_ANON_KEY</code> en{' '}
             <code>.env</code>.
           </div>
         )}
 
         {errorMsg && (
-          <div className="mt-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-200">
+          <div className="mt-4 rounded-md border border-[var(--status-err-border)] bg-[var(--status-err-bg)] p-3 text-xs text-[var(--status-err-fg)]">
             {errorMsg}
           </div>
         )}
 
         {infoMsg && (
-          <div className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+          <div className="mt-4 rounded-md border border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] p-3 text-xs text-[var(--status-ok-fg)]">
             {infoMsg}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-xs font-medium text-slate-300">
+            <label htmlFor="email" className="block text-xs font-medium text-[var(--text-primary)]">
               Correo electrónico
             </label>
             <input
@@ -107,12 +105,12 @@ export function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tu-email@ejemplo.com"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+              className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-xs font-medium text-slate-300">
+            <label htmlFor="password" className="block text-xs font-medium text-[var(--text-primary)]">
               Contraseña
             </label>
             <input
@@ -123,24 +121,25 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Mínimo 6 caracteres"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+              className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
             />
           </div>
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={submitting || !isSupabaseConfigured}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full"
           >
             {submitting
               ? 'Procesando...'
               : modo === 'login'
                 ? 'Entrar al Campus'
                 : 'Crear contraseña'}
-          </button>
+          </Button>
         </form>
 
-        <div className="mt-5 text-center text-xs text-slate-400">
+        <div className="mt-5 text-center text-xs text-[var(--text-secondary)]">
           {modo === 'login' ? (
             <>
               ¿Primera vez entrando?{' '}
@@ -150,7 +149,7 @@ export function LoginPage() {
                   setModo('registro');
                   setErrorMsg(null);
                 }}
-                className="font-medium text-indigo-400 hover:underline"
+                className="font-medium text-[var(--text-primary)] underline underline-offset-2"
               >
                 Activá tu cuenta
               </button>
@@ -164,7 +163,7 @@ export function LoginPage() {
                   setModo('login');
                   setErrorMsg(null);
                 }}
-                className="font-medium text-indigo-400 hover:underline"
+                className="font-medium text-[var(--text-primary)] underline underline-offset-2"
               >
                 Iniciá sesión
               </button>

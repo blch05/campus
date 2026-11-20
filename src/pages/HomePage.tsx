@@ -1,56 +1,67 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, ClipboardCheck, GitPullRequest, Rocket } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 
-const cards = [
+const sections = [
   {
     to: '/clases',
-    title: 'Portal de Clases y Docs',
-    description: 'Consignas semanales, documentación oficial y presentaciones leídas desde GitHub.',
-    icon: BookOpen,
+    title: 'Clases y Docs',
+    description: 'Consignas semanales con desbloqueo progresivo y documentación oficial del curso.',
   },
   {
     to: '/evaluador',
-    title: 'Evaluador de PRs (Docente)',
-    description: 'Auditoría rápida de Pull Requests, Guardián de Rutas y diff limpio de código.',
-    icon: GitPullRequest,
+    title: 'Evaluador de PRs',
+    description: 'Revisión rápida del diff modificado, Guardián de Rutas y declaración de uso de IA.',
   },
   {
     to: '/libreta',
-    title: 'Libreta de Notas y Entregas',
-    description: 'Seguimiento de cohorte, cálculo 30/40/30 de exámenes y alertas de recuperatorio.',
-    icon: ClipboardCheck,
+    title: 'Libreta y Cronograma',
+    description: 'Seguimiento de entregas, exámenes eliminatorios (30/40/30) y recuperatorios.',
   },
   {
     to: '/proyectos',
-    title: 'Galería de MVPs',
-    description: 'Productos finales desplegados por los alumnos al completar la Semana 11–12.',
-    icon: Rocket,
+    title: 'Proyectos de la Cohorte',
+    description: 'Galería privada con los MVPs desplegados en producción por los estudiantes.',
   },
 ];
 
 export function HomePage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">
+    <div className="space-y-10">
+      <div className="max-w-2xl space-y-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+          Campus Web · 12 Semanas
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight text-[var(--text-primary)] sm:text-4xl">
           Bootcamp de Programación Web desde Cero
         </h1>
-        <p className="mt-2 max-w-2xl text-slate-400">
-          Panel centralizado para gestionar las 12 semanas de cursada, auditar Pull Requests por
-          diff y llevar el registro de notas y entregas en Supabase.
+        <p className="text-base leading-relaxed text-[var(--text-secondary)]">
+          Todo el material del curso, las consignas semanales y el seguimiento de entregas en un
+          solo lugar. Empezá por la Clase 0 para dejar listo tu entorno y tu primer Pull Request.
         </p>
+        <div className="pt-2">
+          <Link to="/clases">
+            <Button variant="primary">
+              Ir a Clases <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {cards.map(({ to, title, description, icon: Icon }) => (
+        {sections.map(({ to, title, description }) => (
           <Link
             key={to}
             to={to}
-            className="group rounded-xl border border-slate-800 bg-slate-900/60 p-5 transition hover:border-indigo-500/60 hover:bg-slate-900"
+            className="group rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
           >
-            <Icon className="h-6 w-6 text-indigo-400 transition group-hover:scale-110" />
-            <h2 className="mt-3 text-lg font-semibold text-white">{title}</h2>
-            <p className="mt-1 text-sm text-slate-400">{description}</p>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>
+              <ArrowRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--text-primary)]" />
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
+              {description}
+            </p>
           </Link>
         ))}
       </div>

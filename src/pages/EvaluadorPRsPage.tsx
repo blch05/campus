@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ExternalLink } from 'lucide-react';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import {
   isGitHubConfigured,
   listOpenPullRequests,
@@ -32,11 +35,21 @@ export function EvaluadorPRsPage() {
 
   return (
     <div className="grid gap-6 md:grid-cols-3">
-      <aside className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <h1 className="text-lg font-semibold text-white">PRs Abiertos</h1>
-        {prsQuery.isLoading && <p className="text-sm text-slate-400">Buscando PRs...</p>}
+      <aside className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <h1 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          PRs Abiertos
+        </h1>
+        {!isGitHubConfigured && (
+          <p className="text-xs text-[var(--text-secondary)]">
+            Configurá <code>VITE_GITHUB_OWNER</code> y <code>VITE_GITHUB_REPO</code> en{' '}
+            <code>.env</code>.
+          </p>
+        )}
+        {prsQuery.isLoading && (
+          <p className="text-sm text-[var(--text-secondary)]">Buscando PRs...</p>
+        )}
         {prsQuery.data?.length === 0 && (
-          <p className="text-sm text-slate-400">No hay Pull Requests abiertos.</p>
+          <p className="text-sm text-[var(--text-secondary)]">No hay Pull Requests abiertos.</p>
         )}
         <ul className="space-y-2">
           {prsQuery.data?.map((pr) => (
@@ -46,72 +59,72 @@ export function EvaluadorPRsPage() {
                 onClick={() => setSelectedPR(pr)}
                 className={`w-full rounded-lg border p-3 text-left transition ${
                   selectedPR?.number === pr.number
-                    ? 'border-indigo-500 bg-indigo-500/10'
-                    : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                    ? 'border-[var(--text-primary)] bg-[var(--bg-canvas)]'
+                    : 'border-[var(--border)] bg-[var(--bg-canvas)] hover:border-[var(--border-strong)]'
                 }`}
               >
-                <p className="text-sm font-medium text-white">
+                <p className="text-sm font-medium text-[var(--text-primary)]">
                   #{pr.number} {pr.title}
                 </p>
-                <p className="mt-1 text-xs text-slate-400">@{pr.user.login}</p>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">@{pr.user.login}</p>
               </button>
             </li>
           ))}
         </ul>
       </aside>
 
-      <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-6 md:col-span-2">
+      <section className="space-y-5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 md:col-span-2">
         {!selectedPR ? (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-[var(--text-secondary)]">
             Seleccioná un Pull Request para auditar el Guardián de Rutas, la declaración de IA y el
-            diff de código.
+            diff limpio de código.
           </p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-4">
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-xl font-bold text-[var(--text-primary)]">
                   #{selectedPR.number} — {selectedPR.title}
                 </h2>
-                <p className="text-xs text-slate-400">Autor: @{selectedPR.user.login}</p>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Autor: @{selectedPR.user.login}
+                </p>
               </div>
-              <a
-                href={selectedPR.html_url}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
-              >
-                Abrir en GitHub
+              <a href={selectedPR.html_url} target="_blank" rel="noreferrer">
+                <Button variant="secondary" size="sm">
+                  Abrir en GitHub <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
               </a>
             </div>
 
             {guardian && (
-              <div
-                className={`rounded-lg border p-3 text-sm ${
-                  guardian.permitido
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-                    : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
-                }`}
-              >
-                {guardian.permitido
-                  ? `Guardián de Rutas OK: todos los archivos están en ${guardian.prefijoEsperado}`
-                  : `Guardián BLOQUEADO — archivos fuera de ${guardian.prefijoEsperado}: ${guardian.archivosProhibidos.join(', ')}`}
+              <div>
+                {guardian.permitido ? (
+                  <Badge variant="success">
+                    Guardián OK: todos los archivos están en {guardian.prefijoEsperado}
+                  </Badge>
+                ) : (
+                  <Badge variant="error">
+                    BLOQUEADO — fuera de {guardian.prefijoEsperado}:{' '}
+                    {guardian.archivosProhibidos.join(', ')}
+                  </Badge>
+                )}
               </div>
             )}
 
             {selectedPR.body && (
-              <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
-                <h3 className="text-xs font-semibold uppercase text-slate-400">
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)] p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                   Descripción y Declaración de IA
                 </h3>
-                <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-200">
+                <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--text-secondary)]">
                   {selectedPR.body}
                 </pre>
               </div>
             )}
 
             <div className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase text-slate-400">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Diff limpio de código modificado
               </h3>
               {filesQuery.data
@@ -120,12 +133,12 @@ export function EvaluadorPRsPage() {
                   <details
                     key={file.filename}
                     open
-                    className="rounded-lg border border-slate-800 bg-slate-950"
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)]"
                   >
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-mono text-slate-200">
+                    <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-[var(--text-primary)]">
                       {file.filename} (+{file.additions} / -{file.deletions})
                     </summary>
-                    <pre className="overflow-x-auto border-t border-slate-800 p-3 text-xs text-slate-300">
+                    <pre className="overflow-x-auto border-t border-[var(--border)] p-3 text-xs text-[var(--text-secondary)]">
                       {file.patch}
                     </pre>
                   </details>
