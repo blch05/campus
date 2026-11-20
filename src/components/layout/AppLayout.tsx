@@ -11,6 +11,7 @@ export function AppLayout() {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const perfil = useAuthStore((s) => s.perfil);
+  const perfilError = useAuthStore((s) => s.perfilError);
   const signOut = useAuthStore((s) => s.signOut);
   const esStaff = useAuthStore((s) => s.esStaff);
   const esAdmin = useAuthStore((s) => s.esAdmin);
@@ -109,8 +110,16 @@ export function AppLayout() {
       <main className={isFullBleedPage ? 'flex-1' : 'mx-auto w-full max-w-5xl flex-1 px-6 py-10'}>
         {user && !perfil && isSupabaseConfigured && (
           <div className="mx-auto mb-6 max-w-3xl rounded-lg border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-4 py-3 text-sm text-[var(--status-warn-fg)]">
-            Tu correo (<code>{user.email}</code>) todavía no está vinculado a un registro en{' '}
-            <code>public.alumnos</code>. Pedile al profesor/administrador que cargue tu perfil.
+            {perfilError ? (
+              <>
+                Error al leer tu perfil desde Supabase: <code>{perfilError}</code>
+              </>
+            ) : (
+              <>
+                Tu correo (<code>{user.email}</code>) todavía no está vinculado a un registro en{' '}
+                <code>public.alumnos</code>. Pedile al profesor/administrador que cargue tu perfil.
+              </>
+            )}
           </div>
         )}
 

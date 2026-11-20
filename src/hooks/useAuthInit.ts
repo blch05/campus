@@ -3,7 +3,9 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
 export function useAuthInit() {
-  const setSessionUser = useAuthStore((s) => s.setSessionUser);
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const fetchPerfil = useAuthStore((s) => s.fetchPerfil);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -12,7 +14,7 @@ export function useAuthInit() {
 
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) {
-        void setSessionUser(data.session?.user ?? null);
+        setUser(data.session?.user ?? null);
       }
     });
 
@@ -20,7 +22,7 @@ export function useAuthInit() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
-        void setSessionUser(session?.user ?? null);
+        setUser(session?.user ?? null);
       }
     });
 
@@ -28,5 +30,11 @@ export function useAuthInit() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [setSessionUser]);
+  }, [setUser]);
+
+  // Cargar perfil fuera del callback de onAuthStateChange para evitar lock de Supabase JS v2
+  useEffect(() => {
+    if (!isSupabaseConfigured || !user?.id) return;
+    void fetchPerfil(user.id);
+  }, [user?.id, fetchPerfil]);
 }

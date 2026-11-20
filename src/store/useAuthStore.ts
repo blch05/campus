@@ -6,8 +6,10 @@ import type { Alumno } from '../types/database';
 interface AuthState {
   user: User | null;
   perfil: Alumno | null;
+  perfilError: string | null;
   loading: boolean;
-  setSessionUser: (user: User | null) => Promise<void>;
+  setUser: (user: User | null) => void;
+  fetchPerfil: (userId: string) => Promise<void>;
   signOut: () => Promise<void>;
   esProfesor: () => boolean;
   esAdmin: () => boolean;
@@ -17,33 +19,39 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   perfil: null,
+  perfilError: null,
   loading: isSupabaseConfigured,
 
-  setSessionUser: async (user) => {
-    if (!user || !supabase) {
-      set({ user: null, perfil: null, loading: false });
+  setUser: (user) => {
+    if (!user) {
+      set({ user: null, perfil: null, perfilError: null, loading: false });
       return;
     }
+    set({ user, loading: false });
+  },
 
+  fetchPerfil: async (userId) => {
+    if (!supabase) return;
     const { data, error } = await supabase
       .from('alumnos')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
     if (error) {
-      set({ user, perfil: null, loading: false });
+      console.error('[WTDev Auth] Error al cargar perfil desde public.alumnos:', error);
+      set({ perfil: null, perfilError: `${error.code ?? ''} ${error.message}`.trim() });
       return;
     }
 
-    set({ user, perfil: (data as Alumno | null) ?? null, loading: false });
+    set({ perfil: (data as Alumno | null) ?? null, perfilError: null });
   },
 
   signOut: async () => {
     if (supabase) {
       await supabase.auth.signOut();
     }
-    set({ user: null, perfil: null, loading: false });
+    set({ user: null, perfil: null, perfilError: null, loading: false });
   },
 
   esProfesor: () => get().perfil?.rol === 'profesor',
