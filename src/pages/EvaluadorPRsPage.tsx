@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import {
   isGitHubConfigured,
   listOpenPullRequests,
@@ -46,7 +47,11 @@ export function EvaluadorPRsPage() {
           </p>
         )}
         {prsQuery.isLoading && (
-          <p className="text-sm text-[var(--text-secondary)]">Buscando PRs...</p>
+          <div className="space-y-2">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+            <Spinner label="Buscando Pull Requests..." className="pt-1" />
+          </div>
         )}
         {prsQuery.data?.length === 0 && (
           <p className="text-sm text-[var(--text-secondary)]">No hay Pull Requests abiertos.</p>
@@ -127,22 +132,30 @@ export function EvaluadorPRsPage() {
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Diff limpio de código modificado
               </h3>
-              {filesQuery.data
-                ?.filter((f) => !IGNORED_FILES.has(f.filename.split('/').pop() ?? '') && f.patch)
-                .map((file) => (
-                  <details
-                    key={file.filename}
-                    open
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)]"
-                  >
-                    <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-[var(--text-primary)]">
-                      {file.filename} (+{file.additions} / -{file.deletions})
-                    </summary>
-                    <pre className="overflow-x-auto border-t border-[var(--border)] p-3 text-xs text-[var(--text-secondary)]">
-                      {file.patch}
-                    </pre>
-                  </details>
-                ))}
+              {filesQuery.isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                  <Spinner label="Cargando archivos modificados..." />
+                </div>
+              ) : (
+                filesQuery.data
+                  ?.filter((f) => !IGNORED_FILES.has(f.filename.split('/').pop() ?? '') && f.patch)
+                  .map((file) => (
+                    <details
+                      key={file.filename}
+                      open
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)]"
+                    >
+                      <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-[var(--text-primary)]">
+                        {file.filename} (+{file.additions} / -{file.deletions})
+                      </summary>
+                      <pre className="overflow-x-auto border-t border-[var(--border)] p-3 text-xs text-[var(--text-secondary)]">
+                        {file.patch}
+                      </pre>
+                    </details>
+                  ))
+              )}
             </div>
           </>
         )}

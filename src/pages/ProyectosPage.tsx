@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
+import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { ProyectoCohorte } from '../types/database';
 
@@ -27,7 +28,24 @@ export function ProyectosPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {proyectosQuery.data?.map((proyecto) => (
+        {proyectosQuery.isLoading ? (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5"
+              >
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="mt-4 h-3 w-1/3" />
+              </div>
+            ))}
+            <div className="sm:col-span-2 lg:col-span-3">
+              <Spinner label="Cargando proyectos de la cohorte..." />
+            </div>
+          </>
+        ) : (
+          proyectosQuery.data?.map((proyecto) => (
           <div
             key={proyecto.github_username}
             className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5"
@@ -61,9 +79,10 @@ export function ProyectosPage() {
               )}
             </div>
           </div>
-        ))}
+        ))
+        )}
 
-        {(!proyectosQuery.data || proyectosQuery.data.length === 0) && (
+        {!proyectosQuery.isLoading && (!proyectosQuery.data || proyectosQuery.data.length === 0) && (
           <div className="rounded-xl border border-dashed border-[var(--border-strong)] p-8 text-sm text-[var(--text-secondary)] sm:col-span-2 lg:col-span-3">
             Todavía no hay MVPs publicados. En la Semana 11 los alumnos emancipan su proyecto a su
             propio repositorio y lo despliegan en Vercel + Render.

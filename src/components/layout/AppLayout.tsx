@@ -6,11 +6,13 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useThemeStore } from '../../store/useThemeStore';
 import { TeacherAuditOverlay } from '../audit/TeacherAuditOverlay';
 import { Button } from '../ui/Button';
+import { Skeleton } from '../ui/Skeleton';
 
 export function AppLayout() {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const perfil = useAuthStore((s) => s.perfil);
+  const perfilLoading = useAuthStore((s) => s.perfilLoading);
   const perfilError = useAuthStore((s) => s.perfilError);
   const signOut = useAuthStore((s) => s.signOut);
   const esStaff = useAuthStore((s) => s.esStaff);
@@ -77,19 +79,30 @@ export function AppLayout() {
 
             {user ? (
               <>
-                <div className="hidden items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs sm:flex">
-                  <span className="font-medium text-[var(--text-primary)]">
-                    {perfil?.nombre ?? user.email}
-                  </span>
-                  {perfil && (
-                    <span className="text-[var(--text-secondary)]">· {perfil.rol}</span>
-                  )}
-                  {esAdmin() && (
-                    <span className="inline-flex items-center gap-0.5 font-medium text-[var(--text-primary)]">
-                      · <Shield className="h-3 w-3" /> Admin
+                {perfilLoading ? (
+                  <div
+                    aria-label="Cargando perfil"
+                    className="hidden h-7 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 sm:flex"
+                  >
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                ) : (
+                  <div className="hidden items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs sm:flex">
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {perfil?.nombre ?? user.email}
                     </span>
-                  )}
-                </div>
+                    {perfil && (
+                      <span className="text-[var(--text-secondary)]">· {perfil.rol}</span>
+                    )}
+                    {esAdmin() && (
+                      <span className="inline-flex items-center gap-0.5 font-medium text-[var(--text-primary)]">
+                        · <Shield className="h-3 w-3" /> Admin
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <Button variant="secondary" size="sm" onClick={() => void signOut()}>
                   <LogOut className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Salir</span>
@@ -108,7 +121,7 @@ export function AppLayout() {
       </header>
 
       <main className={isFullBleedPage ? 'flex-1' : 'mx-auto w-full max-w-5xl flex-1 px-6 py-10'}>
-        {user && !perfil && isSupabaseConfigured && (
+        {user && !perfil && !perfilLoading && isSupabaseConfigured && (
           <div className="mx-auto mb-6 max-w-3xl rounded-lg border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] px-4 py-3 text-sm text-[var(--status-warn-fg)]">
             {perfilError ? (
               <>

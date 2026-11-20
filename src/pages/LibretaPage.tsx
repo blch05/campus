@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Lock, Plus, Unlock } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import type {
@@ -309,7 +310,17 @@ export function LibretaPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {clasesQuery.data?.map((clase) => (
+              {clasesQuery.isLoading ? (
+                <tr>
+                  <td colSpan={esStaff ? 5 : 4} className="space-y-2 px-4 py-6">
+                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="h-5 w-11/12" />
+                    <Skeleton className="h-5 w-4/5" />
+                    <Spinner label="Cargando cronograma..." className="pt-1" />
+                  </td>
+                </tr>
+              ) : (
+                clasesQuery.data?.map((clase) => (
                 <tr key={clase.id}>
                   <td className="px-4 py-3 font-mono text-[var(--text-muted)]">
                     {String(clase.numero).padStart(2, '0')}
@@ -349,7 +360,8 @@ export function LibretaPage() {
                     </td>
                   )}
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>
@@ -435,7 +447,16 @@ export function LibretaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {entregasQuery.data?.map((ent) => {
+                {entregasQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={esStaff ? 5 : 4} className="space-y-2 px-4 py-6">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-5/6" />
+                      <Spinner label="Cargando entregas..." className="pt-1" />
+                    </td>
+                  </tr>
+                ) : (
+                  entregasQuery.data?.map((ent) => {
                   const alumno = alumnosById.get(ent.alumno_id);
                   return (
                     <tr key={ent.id}>
@@ -458,8 +479,9 @@ export function LibretaPage() {
                       </td>
                     </tr>
                   );
-                })}
-                {(!entregasQuery.data || entregasQuery.data.length === 0) && (
+                })
+                )}
+                {!entregasQuery.isLoading && (!entregasQuery.data || entregasQuery.data.length === 0) && (
                   <tr>
                     <td
                       colSpan={esStaff ? 5 : 4}
@@ -582,7 +604,16 @@ export function LibretaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {examenesQuery.data?.map((ex) => {
+                {examenesQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={esStaff ? 7 : 6} className="space-y-2 px-4 py-6">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-5/6" />
+                      <Spinner label="Cargando exámenes..." className="pt-1" />
+                    </td>
+                  </tr>
+                ) : (
+                  examenesQuery.data?.map((ex) => {
                   const alumno = alumnosById.get(ex.alumno_id);
                   return (
                     <tr key={ex.id}>
@@ -606,8 +637,9 @@ export function LibretaPage() {
                       </td>
                     </tr>
                   );
-                })}
-                {(!examenesQuery.data || examenesQuery.data.length === 0) && (
+                })
+                )}
+                {!examenesQuery.isLoading && (!examenesQuery.data || examenesQuery.data.length === 0) && (
                   <tr>
                     <td
                       colSpan={esStaff ? 7 : 6}
@@ -687,7 +719,16 @@ export function LibretaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {alumnos.map((a) => (
+                {alumnosQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="space-y-2 px-4 py-6">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-4/5" />
+                      <Spinner label="Cargando cohorte..." className="pt-1" />
+                    </td>
+                  </tr>
+                ) : (
+                  alumnos.map((a) => (
                   <tr key={a.id}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-[var(--text-primary)]">{a.nombre}</p>
@@ -709,7 +750,8 @@ export function LibretaPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">{a.estado}</td>
                   </tr>
-                ))}
+                ))
+                )}
               </tbody>
             </table>
           </div>

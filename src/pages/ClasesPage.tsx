@@ -14,6 +14,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import { fetchMarkdownFile, githubConfig, isGitHubConfigured, listRepoPath } from '../lib/github';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
@@ -246,7 +247,15 @@ export function ClasesPage() {
             </div>
 
             <div className="space-y-3 overflow-y-auto">
-              {[0, 1, 2, 3].map((fase) => {
+              {isSupabaseConfigured && clasesDbQuery.isLoading ? (
+                <div className="space-y-2 px-1.5">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-7 w-full" />
+                  <Skeleton className="h-7 w-full" />
+                  <Skeleton className="h-7 w-4/5" />
+                </div>
+              ) : (
+                [0, 1, 2, 3].map((fase) => {
                 const items = clases.filter((c) => c.fase === fase);
                 if (items.length === 0) return null;
                 const isOpen = Boolean(openFases[fase]);
@@ -309,7 +318,8 @@ export function ClasesPage() {
                     )}
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
 
             <div className="my-4 h-px bg-[var(--border)]" />
@@ -318,6 +328,13 @@ export function ClasesPage() {
               <p className="mb-1.5 px-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Docs
               </p>
+              {isGitHubConfigured && docsQuery.isLoading ? (
+                <div className="space-y-1.5 px-1.5">
+                  <Skeleton className="h-6 w-full" />
+                  <Skeleton className="h-6 w-5/6" />
+                  <Skeleton className="h-6 w-3/4" />
+                </div>
+              ) : (
               <ul className="space-y-0.5">
                 {docsList.map((doc) => {
                   const active = selectedDocPath === doc.path;
@@ -339,6 +356,7 @@ export function ClasesPage() {
                   );
                 })}
               </ul>
+              )}
             </div>
           </div>
         )}
@@ -367,7 +385,13 @@ export function ClasesPage() {
 
               {isGitHubConfigured ? (
                 markdownQuery.isLoading ? (
-                  <p className="text-sm text-[var(--text-secondary)]">Cargando documento...</p>
+                  <div className="space-y-4">
+                    <Skeleton className="h-8 w-2/3" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-11/12" />
+                    <Skeleton className="h-4 w-4/5" />
+                    <Spinner label="Cargando documento desde GitHub..." className="pt-2" />
+                  </div>
                 ) : markdownQuery.isError ? (
                   <p className="text-sm text-[var(--status-err-fg)]">
                     {(markdownQuery.error as Error).message}
@@ -467,10 +491,12 @@ export function ClasesPage() {
                 </div>
               ) : isGitHubConfigured ? (
                 markdownQuery.isLoading ? (
-                  <div className="space-y-3">
-                    <div className="h-8 w-2/3 animate-pulse rounded bg-[var(--bg-surface)]" />
-                    <div className="h-4 w-full animate-pulse rounded bg-[var(--bg-surface)]" />
-                    <div className="h-4 w-5/6 animate-pulse rounded bg-[var(--bg-surface)]" />
+                  <div className="space-y-4">
+                    <Skeleton className="h-8 w-2/3" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Spinner label="Cargando consigna desde GitHub..." className="pt-2" />
                   </div>
                 ) : markdownQuery.isError ? (
                   <p className="text-sm text-[var(--status-err-fg)]">

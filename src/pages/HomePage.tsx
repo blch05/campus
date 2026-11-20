@@ -1,32 +1,41 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
-import { BRAND_NAME } from '../lib/brand';
 import { Button } from '../components/ui/Button';
-
-const sections = [
-  {
-    to: '/clases',
-    title: 'Clases y Docs',
-    description: 'Consignas semanales con desbloqueo progresivo y documentación oficial del curso.',
-  },
-  {
-    to: '/evaluador',
-    title: 'Evaluador de PRs',
-    description: 'Revisión rápida del diff modificado, Guardián de Rutas y declaración de uso de IA.',
-  },
-  {
-    to: '/libreta',
-    title: 'Libreta y Cronograma',
-    description: 'Seguimiento de entregas, exámenes eliminatorios (30/40/30) y recuperatorios.',
-  },
-  {
-    to: '/proyectos',
-    title: 'Proyectos de la Cohorte',
-    description: 'Galería privada con los MVPs desplegados en producción por los estudiantes.',
-  },
-];
+import { BRAND_NAME } from '../lib/brand';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { useAuthStore } from '../store/useAuthStore';
 
 export function HomePage() {
+  const esStaff = useAuthStore((s) => s.esStaff)();
+  const showStaffCards = !isSupabaseConfigured || esStaff;
+
+  const sections = [
+    {
+      to: '/clases',
+      title: 'Clases y Docs',
+      description: 'Consignas semanales con desbloqueo progresivo y documentación oficial del curso.',
+      visible: true,
+    },
+    {
+      to: '/evaluador',
+      title: 'Evaluador de PRs',
+      description: 'Revisión rápida del diff modificado, Guardián de Rutas y declaración de uso de IA.',
+      visible: showStaffCards,
+    },
+    {
+      to: '/libreta',
+      title: 'Libreta y Cronograma',
+      description: 'Seguimiento de entregas, exámenes eliminatorios (30/40/30) y recuperatorios.',
+      visible: true,
+    },
+    {
+      to: '/proyectos',
+      title: 'Proyectos de la Cohorte',
+      description: 'Galería privada con los MVPs desplegados en producción por los estudiantes.',
+      visible: true,
+    },
+  ];
+
   return (
     <div className="space-y-10">
       <div className="max-w-2xl space-y-4">
@@ -50,21 +59,23 @@ export function HomePage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {sections.map(({ to, title, description }) => (
-          <Link
-            key={to}
-            to={to}
-            className="group rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>
-              <ArrowRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--text-primary)]" />
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
-              {description}
-            </p>
-          </Link>
-        ))}
+        {sections
+          .filter((s) => s.visible)
+          .map(({ to, title, description }) => (
+            <Link
+              key={to}
+              to={to}
+              className="group rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>
+                <ArrowRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--text-primary)]" />
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
+                {description}
+              </p>
+            </Link>
+          ))}
       </div>
     </div>
   );

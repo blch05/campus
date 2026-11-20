@@ -115,6 +115,14 @@ begin
     split_part(new.email, '@', 1) || '-' || substr(new.id::text, 1, 6)
   ));
 
+  -- Evitar colisión si otro usuario ya registró el mismo github_username
+  if exists (
+    select 1 from public.alumnos
+    where github_username = v_github and lower(email) <> lower(new.email)
+  ) then
+    v_github := v_github || '-' || substr(new.id::text, 1, 4);
+  end if;
+
   insert into public.alumnos (user_id, nombre, email, github_username, rol, es_admin)
   values (new.id, v_nombre, lower(new.email), v_github, 'estudiante', false)
   on conflict (email) do update
