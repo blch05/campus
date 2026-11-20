@@ -19,6 +19,10 @@ create table if not exists public.alumnos (
   created_at timestamptz not null default now()
 );
 
+-- Compatibilidad si las tablas ya existían de una versión anterior
+alter table public.alumnos add column if not exists es_admin boolean not null default false;
+alter table public.alumnos add column if not exists mvp_api_url text;
+
 -- 2. Agenda de Clases (conecta el banner de "Próxima clase", desbloqueo progresivo y Google Calendar)
 create table if not exists public.clases (
   id serial primary key,
@@ -35,6 +39,8 @@ create table if not exists public.clases (
   nota_cambio text,
   gcal_event_id text
 );
+
+alter table public.clases add column if not exists desbloqueada boolean not null default false;
 
 -- 3. Entregas semanales por estudiante (cruza PRs de GitHub + prórrogas/excepciones)
 create table if not exists public.entregas (

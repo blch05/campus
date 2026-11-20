@@ -4,6 +4,7 @@ import { BRAND_NAME } from '../../lib/brand';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useThemeStore } from '../../store/useThemeStore';
+import { TeacherAuditOverlay } from '../audit/TeacherAuditOverlay';
 import { Button } from '../ui/Button';
 
 export function AppLayout() {
@@ -115,6 +116,8 @@ export function AppLayout() {
 
         <Outlet />
       </main>
+
+      {showStaffNav && <TeacherAuditOverlay />}
     </div>
   );
 }
