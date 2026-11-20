@@ -3,6 +3,7 @@ import { Database, Play, Terminal, X } from 'lucide-react';
 import { fetchMarkdownFile, isGitHubConfigured } from '../../lib/github';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { SchemaVisualizer } from './SchemaVisualizer';
 
 type AuditTab = 'endpoints' | 'schema';
 
@@ -13,45 +14,6 @@ interface ProbeResult {
   ms: number;
   ok: boolean;
   preview: string;
-}
-
-interface ParsedTable {
-  name: string;
-  columns: string[];
-  foreignKeys: string[];
-}
-
-function parseSqlSchema(sql: string): ParsedTable[] {
-  const tables: ParsedTable[] = [];
-  const regex = /create\s+table\s+(?:if\s+not\s+exists\s+)?([a-z0-9_."]+)\s*\(([\s\S]*?)\);/gi;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(sql)) !== null) {
-    const tableName = match[1].replace(/"/g, '');
-    const body = match[2];
-    const lines = body
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith('--'));
-
-    const columns: string[] = [];
-    const foreignKeys: string[] = [];
-
-    for (const line of lines) {
-      const refMatch = line.match(/references\s+([a-z0-9_."]+)\s*\(([^)]+)\)/i);
-      const colName = line.split(/\s+/)[0].replace(/[,("]/g, '');
-      if (!/^(constraint|primary|unique|check|foreign)/i.test(colName)) {
-        columns.push(line.replace(/,$/, ''));
-      }
-      if (refMatch) {
-        foreignKeys.push(`${colName} → ${refMatch[1]}(${refMatch[2]})`);
-      }
-    }
-
-    tables.push({ name: tableName, columns, foreignKeys });
-  }
-
-  return tables;
 }
 
 export function TeacherAuditOverlay() {
@@ -167,8 +129,6 @@ export function TeacherAuditOverlay() {
     }
   }
 
-  const parsedTables = parseSqlSchema(sqlText);
-
   if (!open) {
     return (
       <button
@@ -185,7 +145,11 @@ export function TeacherAuditOverlay() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--bg-canvas)] shadow-2xl">
+      <div
+        className={`flex max-h-[88vh] w-full flex-col overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--bg-canvas)] shadow-2xl ${
+          tab === 'schema' ? 'max-w-5xl' : 'max-w-3xl'
+        }`}
+      >
         <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-surface)] px-5 py-3">
           <div className="flex items-center gap-2">
             <Terminal className="h-4 w-4 text-[var(--text-primary)]" />
@@ -324,28 +288,7 @@ export function TeacherAuditOverlay() {
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-surface)] p-3 font-mono text-xs text-[var(--text-primary)]"
               />
 
-              {parsedTables.length > 0 && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {parsedTables.map((t) => (
-                    <div
-                      key={t.name}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-xs"
-                    >
-                      <p className="font-mono font-bold text-[var(--text-primary)]">{t.name}</p>
-                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                        {t.columns.length} columnas
-                      </p>
-                      {t.foreignKeys.length > 0 && (
-                        <ul className="mt-2 space-y-1 border-t border-[var(--border)] pt-2 font-mono text-[11px] text-[var(--text-secondary)]">
-                          {t.foreignKeys.map((fk) => (
-                            <li key={fk}>FK: {fk}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              {sqlText.trim() && <SchemaVisualizer sql={sqlText} />}
             </div>
           )}
         </div>

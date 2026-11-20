@@ -207,6 +207,76 @@ export function ClasesPage() {
     setOpenFases((prev) => ({ ...prev, [fase]: !prev[fase] }));
   }
 
+  function triggerDownload(filename: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function extractMarkdownTranscript(html: string, titleFallback: string): string {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const title = doc.querySelector('title')?.textContent?.trim() || titleFallback;
+    const slides = Array.from(doc.querySelectorAll('section.slide, section'));
+    const lines: string[] = [`# ${title} — Transcripción de estudio`, ''];
+
+    if (slides.length === 0) {
+      lines.push(doc.body.innerText.trim());
+      return lines.join('\n');
+    }
+
+    slides.forEach((slide, idx) => {
+      const heading =
+        slide.querySelector('h1, h2')?.textContent?.trim() || `Diapositiva ${idx + 1}`;
+      lines.push(`## Slide ${idx + 1}: ${heading}`);
+      lines.push('');
+
+      slide.querySelectorAll('p, li, pre, h3').forEach((el) => {
+        const text = el.textContent?.trim();
+        if (!text) return;
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'h3') {
+          lines.push(`### ${text}`);
+        } else if (tag === 'li') {
+          lines.push(`- ${text}`);
+        } else if (tag === 'pre') {
+          lines.push('```html');
+          lines.push(text);
+          lines.push('```');
+        } else {
+          lines.push(text);
+        }
+        lines.push('');
+      });
+
+      lines.push('---');
+      lines.push('');
+    });
+
+    return lines.join('\n');
+  }
+
+  async function handleDownloadHtmlOrTranscript(
+    filePath: string,
+    fileName: string,
+    mode: 'html' | 'transcript',
+  ) {
+    const html = await fetchMarkdownFile(filePath);
+    if (mode === 'html') {
+      triggerDownload(fileName, html, 'text/html;charset=utf-8');
+    } else {
+      const base = fileName.replace(/\.html$/i, '');
+      const md = extractMarkdownTranscript(html, base);
+      triggerDownload(`${base}-apuntes.md`, md, 'text/markdown;charset=utf-8');
+    }
+  }
+
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] w-full">
       {/* Sidebar colapsable */}
@@ -564,15 +634,40 @@ export function ClasesPage() {
                         const isHtml = file.name.toLowerCase().endsWith('.html');
                         if (isHtml) {
                           return (
-                            <Button
-                              key={file.path}
-                              variant="primary"
-                              size="sm"
-                              onClick={() => setActiveHtmlPath(file.path)}
-                            >
-                              <Presentation className="h-3.5 w-3.5" />
-                              Abrir {file.name.replace(/\.html$/i, '')}
-                            </Button>
+                            <div key={file.path} className="flex flex-wrap items-center gap-2">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => setActiveHtmlPath(file.path)}
+                              >
+                                <Presentation className="h-3.5 w-3.5" />
+                                Abrir {file.name.replace(/\.html$/i, '')}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() =>
+                                  void handleDownloadHtmlOrTranscript(
+                                    file.path,
+                                    file.name,
+                                    'transcript',
+                                  )
+                                }
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                Transcripción (.md)
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() =>
+                                  void handleDownloadHtmlOrTranscript(file.path, file.name, 'html')
+                                }
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                Descargar .html
+                              </Button>
+                            </div>
                           );
                         }
                         return (
@@ -624,12 +719,47 @@ export function ClasesPage() {
       {/* Visor modal de presentación HTML interactiva */}
       {activeHtmlPath && (
         <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg-canvas)]">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-surface)] px-4">
-            <span className="font-mono text-xs text-[var(--text-secondary)]">{activeHtmlPath}</span>
-            <Button variant="secondary" size="sm" onClick={() => setActiveHtmlPath(null)}>
-              <X className="h-3.5 w-3.5" />
-              Cerrar (Esc)
-            </Button>
+          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--bg-surface)] px-4">
+            <span className="truncate font-mono text-xs text-[var(--text-secondary)]">
+              {activeHtmlPath}
+            </span>
+            <div className="flex items-center gap-2">
+              {htmlPresentationQuery.data && (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const name = activeHtmlPath.split('/').pop() ?? 'presentacion.html';
+                      const base = name.replace(/\.html$/i, '');
+                      triggerDownload(
+                        `${base}-apuntes.md`,
+                        extractMarkdownTranscript(htmlPresentationQuery.data!, base),
+                        'text/markdown;charset=utf-8',
+                      );
+                    }}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Apuntes (.md)
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const name = activeHtmlPath.split('/').pop() ?? 'presentacion.html';
+                      triggerDownload(name, htmlPresentationQuery.data!, 'text/html;charset=utf-8');
+                    }}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    .html
+                  </Button>
+                </>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => setActiveHtmlPath(null)}>
+                <X className="h-3.5 w-3.5" />
+                Cerrar (Esc)
+              </Button>
+            </div>
           </div>
           <div className="flex-1">
             {htmlPresentationQuery.isLoading ? (
