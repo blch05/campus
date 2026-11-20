@@ -12,6 +12,8 @@ export function LoginPage() {
   const user = useAuthStore((s) => s.user);
 
   const [modo, setModo] = useState<ModoAuth>('login');
+  const [nombre, setNombre] = useState('');
+  const [githubUsername, setGithubUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -44,12 +46,18 @@ export function LoginPage() {
         if (error) throw error;
       } else {
         const { error } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password,
+          options: {
+            data: {
+              nombre: nombre.trim(),
+              github_username: githubUsername.trim().toLowerCase().replace(/^@/, ''),
+            },
+          },
         });
         if (error) throw error;
         setInfoMsg(
-          'Cuenta creada. Si tenés confirmación por correo activa en Supabase, revisá tu bandeja de entrada; si no, ya podés iniciar sesión.',
+          'Cuenta creada y vinculada automáticamente. Si tenés confirmación por correo activa en Supabase, revisá tu bandeja; si no, ya podés iniciar sesión.',
         );
         setModo('login');
       }
@@ -67,12 +75,12 @@ export function LoginPage() {
           {BRAND_NAME}
         </p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--text-primary)]">
-          {modo === 'login' ? 'Iniciar sesión' : 'Activar tu cuenta'}
+          {modo === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {modo === 'login'
-            ? 'Ingresá con el email registrado en la cohorte.'
-            : 'Usá el mismo email que le pasaste al instructor para vincular tu perfil.'}
+            ? 'Ingresá con tu correo y contraseña.'
+            : 'Completá tus datos para crear tu perfil de estudiante automáticamente.'}
         </p>
 
         {!isSupabaseConfigured && (
@@ -95,6 +103,40 @@ export function LoginPage() {
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          {modo === 'registro' && (
+            <>
+              <div>
+                <label htmlFor="nombre" className="block text-xs font-medium text-[var(--text-primary)]">
+                  Nombre completo
+                </label>
+                <input
+                  id="nombre"
+                  type="text"
+                  required
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Tu nombre y apellido"
+                  className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="github" className="block text-xs font-medium text-[var(--text-primary)]">
+                  Usuario de GitHub
+                </label>
+                <input
+                  id="github"
+                  type="text"
+                  required
+                  value={githubUsername}
+                  onChange={(e) => setGithubUsername(e.target.value)}
+                  placeholder="tu-usuario-github"
+                  className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
+                />
+              </div>
+            </>
+          )}
+
           <div>
             <label htmlFor="email" className="block text-xs font-medium text-[var(--text-primary)]">
               Correo electrónico

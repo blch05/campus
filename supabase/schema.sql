@@ -94,19 +94,33 @@ create trigger trg_examenes_updated_at
   before update on public.examenes
   for each row execute function public.set_updated_at();
 
--- Triggers bidireccionales de vinculación auth.users <-> public.alumnos por email
--- 1) Si el alumno se registra después de haber sido precargado en public.alumnos
+-- Trigger automático: al registrarse cualquier usuario en auth.users, crea su perfil en public.alumnos
+-- (si ya existía precargado por email, conserva su rol/es_admin y solo vincula user_id)
 create or replace function public.vincular_alumno_on_auth_signup()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_nombre text;
+  v_github text;
 begin
-  update public.alumnos
-  set user_id = new.id
-  where lower(email) = lower(new.email)
-    and user_id is null;
+  v_nombre := coalesce(
+    nullif(trim(new.raw_user_meta_data->>'nombre'), ''),
+    split_part(new.email, '@', 1)
+  );
+  v_github := lower(coalesce(
+    nullif(trim(new.raw_user_meta_data->>'github_username'), ''),
+    split_part(new.email, '@', 1) || '-' || substr(new.id::text, 1, 6)
+  ));
+
+  insert into public.alumnos (user_id, nombre, email, github_username, rol, es_admin)
+  values (new.id, v_nombre, lower(new.email), v_github, 'estudiante', false)
+  on conflict (email) do update
+    set user_id = excluded.user_id
+    where public.alumnos.user_id is null;
+
   return new;
 end;
 $$;
