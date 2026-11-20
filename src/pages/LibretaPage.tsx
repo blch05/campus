@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar, ExternalLink, Lock, Plus, Trash2, Unlock, Video, X } from 'lucide-react';
+import { Calendar, ExternalLink, Lock, Pencil, Plus, Trash2, Unlock, Video, X } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
@@ -72,6 +72,7 @@ function formatClaseFecha(iso: string | null): string {
 export function LibretaPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const perfil = useAuthStore((s) => s.perfil);
   const esStaff = useAuthStore((s) => s.esStaff)();
   const esAdmin = useAuthStore((s) => s.esAdmin)();
 
@@ -119,9 +120,20 @@ export function LibretaPage() {
 
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
-    tipo: 'entrega' | 'examen';
+    tipo: 'entrega' | 'examen' | 'alumno';
     id: string;
   } | null>(null);
+
+  // Form: editar alumno existente (solo admin)
+  const [editAlumnoId, setEditAlumnoId] = useState<string | null>(null);
+  const [editAlNombre, setEditAlNombre] = useState('');
+  const [editAlGithub, setEditAlGithub] = useState('');
+  const [editAlRol, setEditAlRol] = useState<RolUsuario>('estudiante');
+  const [editAlEsAdmin, setEditAlEsAdmin] = useState(false);
+  const [editAlEstado, setEditAlEstado] = useState<EstadoAlumno>('activo');
+  const [editAlMvpTitulo, setEditAlMvpTitulo] = useState('');
+  const [editAlMvpUrl, setEditAlMvpUrl] = useState('');
+  const [editAlMvpRepoUrl, setEditAlMvpRepoUrl] = useState('');
 
   const clasesQuery = useQuery({
     queryKey: ['supabase', 'clases'],
@@ -266,9 +278,86 @@ export function LibretaPage() {
     onSuccess: () => {
       setFeedback({ type: 'ok', text: 'Estado del usuario actualizado.' });
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'alumnos'] });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'proyectos_cohorte'] });
     },
     onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
   });
+
+  const updateAlumnoMutation = useMutation({
+    mutationFn: async () => {
+      if (!editAlumnoId) throw new Error('Ningún usuario seleccionado.');
+      const cleanMvpUrl = editAlMvpUrl.trim();
+      const cleanMvpRepo = editAlMvpRepoUrl.trim();
+      if (cleanMvpUrl && !safeExternalUrl(cleanMvpUrl)) {
+        throw new Error('La URL del MVP debe empezar con https:// o http://.');
+      }
+      if (cleanMvpRepo && !safeExternalUrl(cleanMvpRepo)) {
+        throw new Error('La URL del repositorio debe empezar con https:// o http://.');
+      }
+      const isSelf = perfil?.id === editAlumnoId;
+      const { error } = await supabase!
+        .from('alumnos')
+        .update({
+          nombre: editAlNombre.trim(),
+          github_username: editAlGithub.trim().toLowerCase().replace(/^@/, ''),
+          rol: editAlRol,
+          es_admin: isSelf ? true : editAlEsAdmin,
+          estado: editAlEstado,
+          mvp_titulo: editAlMvpTitulo.trim() || null,
+          mvp_url: cleanMvpUrl || null,
+          mvp_repo_url: cleanMvpRepo || null,
+        })
+        .eq('id', editAlumnoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditAlumnoId(null);
+      setFeedback({ type: 'ok', text: 'Usuario actualizado correctamente.' });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'alumnos'] });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'proyectos_cohorte'] });
+    },
+    onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
+  });
+
+  const deleteAlumnoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (perfil?.id === id) {
+        throw new Error('No podés eliminar tu propia cuenta de administrador.');
+      }
+      const { error } = await supabase!.from('alumnos').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirmDelete(null);
+      setFeedback({ type: 'ok', text: 'Usuario eliminado de la cohorte.' });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'alumnos'] });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'proyectos_cohorte'] });
+    },
+    onError: (err) => {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) });
+    },
+  });
+
+  function openEditAlumno(a: Alumno) {
+    setFeedback(null);
+    setConfirmDelete(null);
+    setEditAlumnoId(a.id);
+    setEditAlNombre(a.nombre);
+    setEditAlGithub(a.github_username);
+    setEditAlRol(a.rol);
+    setEditAlEsAdmin(a.es_admin);
+    setEditAlEstado(a.estado);
+    setEditAlMvpTitulo(a.mvp_titulo ?? '');
+    setEditAlMvpUrl(a.mvp_url ?? '');
+    setEditAlMvpRepoUrl(a.mvp_repo_url ?? '');
+  }
+
+  function handleSaveAlumnoEdit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFeedback(null);
+    updateAlumnoMutation.mutate();
+  }
 
   const upsertEntregaMutation = useMutation({
     mutationFn: async () => {
@@ -1104,6 +1193,144 @@ export function LibretaPage() {
             </form>
           )}
 
+          {esAdmin && editAlumnoId && (
+            <form
+              onSubmit={handleSaveAlumnoEdit}
+              className="space-y-4 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] p-5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+                    Editar usuario y MVP
+                  </p>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                    {editAlNombre} (@{editAlGithub})
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditAlumnoId(null)}
+                  aria-label="Cerrar editor de usuario"
+                  className="rounded-md p-1 text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Nombre *</span>
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={80}
+                    value={editAlNombre}
+                    onChange={(e) => setEditAlNombre(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Usuario GitHub *</span>
+                  <input
+                    required
+                    maxLength={39}
+                    value={editAlGithub}
+                    onChange={(e) => setEditAlGithub(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 font-mono text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Rol</span>
+                  <select
+                    value={editAlRol}
+                    onChange={(e) => setEditAlRol(e.target.value as RolUsuario)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  >
+                    <option value="estudiante">Estudiante</option>
+                    <option value="profesor">Profesor</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Estado</span>
+                  <select
+                    value={editAlEstado}
+                    onChange={(e) => setEditAlEstado(e.target.value as EstadoAlumno)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  >
+                    <option value="activo">activo</option>
+                    <option value="atrasado">atrasado</option>
+                    <option value="baja">baja</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Título MVP (opcional)</span>
+                  <input
+                    type="text"
+                    placeholder="Ej: Turnos Barbería"
+                    value={editAlMvpTitulo}
+                    onChange={(e) => setEditAlMvpTitulo(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>URL App desplegada (opcional)</span>
+                  <input
+                    type="url"
+                    placeholder="https://mi-mvp.vercel.app"
+                    value={editAlMvpUrl}
+                    onChange={(e) => setEditAlMvpUrl(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>URL Repo MVP (opcional)</span>
+                  <input
+                    type="url"
+                    placeholder="https://github.com/usuario/mi-mvp"
+                    value={editAlMvpRepoUrl}
+                    onChange={(e) => setEditAlMvpRepoUrl(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2 self-end pb-2 text-xs text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    checked={perfil?.id === editAlumnoId ? true : editAlEsAdmin}
+                    disabled={perfil?.id === editAlumnoId}
+                    onChange={(e) => setEditAlEsAdmin(e.target.checked)}
+                  />
+                  Es Admin {perfil?.id === editAlumnoId && '(tu cuenta)'}
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditAlumnoId(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={updateAlumnoMutation.isPending}
+                >
+                  {updateAlumnoMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
+                </Button>
+              </div>
+            </form>
+          )}
+
           <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-[var(--border)] bg-[var(--bg-canvas)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
@@ -1113,62 +1340,115 @@ export function LibretaPage() {
                   <th className="px-4 py-3">Rol</th>
                   <th className="px-4 py-3">Vinculado Auth</th>
                   <th className="px-4 py-3">Estado</th>
+                  {esAdmin && <th className="px-4 py-3 text-right">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {alumnosQuery.isLoading ? (
                   <tr>
-                    <td colSpan={5} className="space-y-2 px-4 py-6">
+                    <td colSpan={esAdmin ? 6 : 5} className="space-y-2 px-4 py-6">
                       <Skeleton className="h-5 w-full" />
                       <Skeleton className="h-5 w-4/5" />
                       <Spinner label="Cargando cohorte..." className="pt-1" />
                     </td>
                   </tr>
                 ) : (
-                  alumnos.map((a) => (
-                  <tr key={a.id}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-[var(--text-primary)]">{a.nombre}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{a.email}</p>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
-                      @{a.github_username}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="neutral">{a.rol}</Badge>
-                        {a.es_admin && <Badge variant="success">admin</Badge>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={a.user_id ? 'success' : 'warning'}>
-                        {a.user_id ? 'Activo' : 'Pendiente registro'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
-                      {esAdmin ? (
-                        <select
-                          aria-label={`Estado de ${a.nombre}`}
-                          value={a.estado}
-                          disabled={updateAlumnoEstadoMutation.isPending}
-                          onChange={(e) =>
-                            updateAlumnoEstadoMutation.mutate({
-                              id: a.id,
-                              estado: e.target.value as EstadoAlumno,
-                            })
-                          }
-                          className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2 py-1 text-xs text-[var(--text-primary)]"
-                        >
-                          <option value="activo">activo</option>
-                          <option value="atrasado">atrasado</option>
-                          <option value="baja">baja</option>
-                        </select>
-                      ) : (
-                        a.estado
-                      )}
-                    </td>
-                  </tr>
-                ))
+                  alumnos.map((a) => {
+                    const isSelf = perfil?.id === a.id;
+                    const isConfirming =
+                      confirmDelete?.tipo === 'alumno' && confirmDelete.id === a.id;
+                    return (
+                      <tr key={a.id}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-[var(--text-primary)]">{a.nombre}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{a.email}</p>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
+                          @{a.github_username}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="neutral">{a.rol}</Badge>
+                            {a.es_admin && <Badge variant="success">admin</Badge>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={a.user_id ? 'success' : 'warning'}>
+                            {a.user_id ? 'Activo' : 'Pendiente registro'}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
+                          {esAdmin ? (
+                            <select
+                              aria-label={`Estado de ${a.nombre}`}
+                              value={a.estado}
+                              disabled={updateAlumnoEstadoMutation.isPending}
+                              onChange={(e) =>
+                                updateAlumnoEstadoMutation.mutate({
+                                  id: a.id,
+                                  estado: e.target.value as EstadoAlumno,
+                                })
+                              }
+                              className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2 py-1 text-xs text-[var(--text-primary)]"
+                            >
+                              <option value="activo">activo</option>
+                              <option value="atrasado">atrasado</option>
+                              <option value="baja">baja</option>
+                            </select>
+                          ) : (
+                            a.estado
+                          )}
+                        </td>
+                        {esAdmin && (
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
+                            {isConfirming ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={deleteAlumnoMutation.isPending}
+                                  onClick={() => deleteAlumnoMutation.mutate(a.id)}
+                                  className="rounded-md border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-2 py-1 text-xs font-medium text-[var(--status-err-fg)] hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {deleteAlumnoMutation.isPending ? 'Borrando...' : 'Confirmar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDelete(null)}
+                                  className="rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => openEditAlumno(a)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" /> Editar
+                                </Button>
+                                {!isSelf && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFeedback(null);
+                                      setConfirmDelete({ tipo: 'alumno', id: a.id });
+                                    }}
+                                    title={`Eliminar a ${a.nombre}`}
+                                    aria-label={`Eliminar a ${a.nombre}`}
+                                    className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs text-[var(--text-muted)] transition hover:border-[var(--status-err-border)] hover:bg-[var(--status-err-bg)] hover:text-[var(--status-err-fg)]"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
