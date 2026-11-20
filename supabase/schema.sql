@@ -166,6 +166,14 @@ alter table public.clases enable row level security;
 alter table public.entregas enable row level security;
 alter table public.examenes enable row level security;
 
+-- Permisos de tabla para el rol authenticated (RLS controla qué filas ve/edita cada usuario)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.alumnos to authenticated;
+grant select, insert, update, delete on public.clases to authenticated;
+grant select, insert, update, delete on public.entregas to authenticated;
+grant select, insert, update, delete on public.examenes to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 -- Helpers de autorización
 create or replace function public.es_admin()
 returns boolean
