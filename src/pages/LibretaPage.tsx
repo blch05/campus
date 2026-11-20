@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar, ExternalLink, Lock, Plus, Unlock, Video, X } from 'lucide-react';
+import { Calendar, ExternalLink, Lock, Plus, Trash2, Unlock, Video, X } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
@@ -118,6 +118,10 @@ export function LibretaPage() {
   const [editNotaCambio, setEditNotaCambio] = useState('');
 
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    tipo: 'entrega' | 'examen';
+    id: string;
+  } | null>(null);
 
   const clasesQuery = useQuery({
     queryKey: ['supabase', 'clases'],
@@ -334,6 +338,38 @@ export function LibretaPage() {
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'examenes'] });
     },
     onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
+  });
+
+  const deleteEntregaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase!.from('entregas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirmDelete(null);
+      setFeedback({ type: 'ok', text: 'Entrega eliminada.' });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'entregas'] });
+    },
+    onError: (err) => {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) });
+    },
+  });
+
+  const deleteExamenMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase!.from('examenes').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirmDelete(null);
+      setFeedback({ type: 'ok', text: 'Examen eliminado.' });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'examenes'] });
+    },
+    onError: (err) => {
+      setConfirmDelete(null);
+      setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) });
+    },
   });
 
   const alumnos = alumnosQuery.data ?? [];
@@ -718,12 +754,13 @@ export function LibretaPage() {
                   <th className="px-4 py-3">PR</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Observación</th>
+                  {esStaff && <th className="px-4 py-3 text-right">Acción</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {entregasQuery.isLoading ? (
                   <tr>
-                    <td colSpan={esStaff ? 5 : 4} className="space-y-2 px-4 py-6">
+                    <td colSpan={esStaff ? 6 : 4} className="space-y-2 px-4 py-6">
                       <Skeleton className="h-5 w-full" />
                       <Skeleton className="h-5 w-5/6" />
                       <Spinner label="Cargando entregas..." className="pt-1" />
@@ -732,6 +769,8 @@ export function LibretaPage() {
                 ) : (
                   entregasQuery.data?.map((ent) => {
                   const alumno = alumnosById.get(ent.alumno_id);
+                  const isConfirming =
+                    confirmDelete?.tipo === 'entrega' && confirmDelete.id === ent.id;
                   return (
                     <tr key={ent.id}>
                       {esStaff && (
@@ -751,6 +790,42 @@ export function LibretaPage() {
                       <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
                         {ent.observacion ?? '—'}
                       </td>
+                      {esStaff && (
+                        <td className="whitespace-nowrap px-4 py-3 text-right">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={deleteEntregaMutation.isPending}
+                                onClick={() => deleteEntregaMutation.mutate(ent.id)}
+                                className="rounded-md border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-2 py-1 text-xs font-medium text-[var(--status-err-fg)] hover:opacity-90 disabled:opacity-50"
+                              >
+                                {deleteEntregaMutation.isPending ? 'Borrando...' : 'Confirmar'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDelete(null)}
+                                className="rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedback(null);
+                                setConfirmDelete({ tipo: 'entrega', id: ent.id });
+                              }}
+                              title="Eliminar entrega"
+                              aria-label="Eliminar entrega"
+                              className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs text-[var(--text-muted)] transition hover:border-[var(--status-err-border)] hover:bg-[var(--status-err-bg)] hover:text-[var(--status-err-fg)]"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -758,7 +833,7 @@ export function LibretaPage() {
                 {!entregasQuery.isLoading && (!entregasQuery.data || entregasQuery.data.length === 0) && (
                   <tr>
                     <td
-                      colSpan={esStaff ? 5 : 4}
+                      colSpan={esStaff ? 6 : 4}
                       className="px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
                     >
                       Todavía no hay entregas registradas.
@@ -877,12 +952,13 @@ export function LibretaPage() {
                   <th className="px-4 py-3">Final</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Observación</th>
+                  {esStaff && <th className="px-4 py-3 text-right">Acción</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {examenesQuery.isLoading ? (
                   <tr>
-                    <td colSpan={esStaff ? 8 : 7} className="space-y-2 px-4 py-6">
+                    <td colSpan={esStaff ? 9 : 7} className="space-y-2 px-4 py-6">
                       <Skeleton className="h-5 w-full" />
                       <Skeleton className="h-5 w-5/6" />
                       <Spinner label="Cargando exámenes..." className="pt-1" />
@@ -891,6 +967,8 @@ export function LibretaPage() {
                 ) : (
                   examenesQuery.data?.map((ex) => {
                   const alumno = alumnosById.get(ex.alumno_id);
+                  const isConfirming =
+                    confirmDelete?.tipo === 'examen' && confirmDelete.id === ex.id;
                   return (
                     <tr key={ex.id}>
                       {esStaff && (
@@ -914,6 +992,42 @@ export function LibretaPage() {
                       <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
                         {ex.observacion ?? '—'}
                       </td>
+                      {esStaff && (
+                        <td className="whitespace-nowrap px-4 py-3 text-right">
+                          {isConfirming ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={deleteExamenMutation.isPending}
+                                onClick={() => deleteExamenMutation.mutate(ex.id)}
+                                className="rounded-md border border-[var(--status-err-border)] bg-[var(--status-err-bg)] px-2 py-1 text-xs font-medium text-[var(--status-err-fg)] hover:opacity-90 disabled:opacity-50"
+                              >
+                                {deleteExamenMutation.isPending ? 'Borrando...' : 'Confirmar'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDelete(null)}
+                                className="rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedback(null);
+                                setConfirmDelete({ tipo: 'examen', id: ex.id });
+                              }}
+                              title="Eliminar examen"
+                              aria-label="Eliminar examen"
+                              className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs text-[var(--text-muted)] transition hover:border-[var(--status-err-border)] hover:bg-[var(--status-err-bg)] hover:text-[var(--status-err-fg)]"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -921,7 +1035,7 @@ export function LibretaPage() {
                 {!examenesQuery.isLoading && (!examenesQuery.data || examenesQuery.data.length === 0) && (
                   <tr>
                     <td
-                      colSpan={esStaff ? 8 : 7}
+                      colSpan={esStaff ? 9 : 7}
                       className="px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
                     >
                       Todavía no hay exámenes cargados.
