@@ -94,6 +94,7 @@ export function ClasesPage() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
+    if (window.innerWidth < 768) return true;
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true';
   });
 
@@ -104,21 +105,29 @@ export function ClasesPage() {
     3: false,
   });
 
-  const [selectedClaseNum, setSelectedClaseNum] = useState<number>(0);
+  const [selectedClaseNum, setSelectedClaseNum] = useState<number | null>(null);
   const [selectedDocPath, setSelectedDocPath] = useState<string | null>(null);
   const [previewClases, setPreviewClases] = useState<Clase[]>(PREVIEW_CLASES);
   const [activeHtmlPath, setActiveHtmlPath] = useState<string | null>(null);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setActiveHtmlPath(null);
+      if (e.key === 'Escape') {
+        if (activeHtmlPath) {
+          setActiveHtmlPath(null);
+        } else if (typeof window !== 'undefined' && window.innerWidth < 768 && !sidebarCollapsed) {
+          setSidebarCollapsed(true);
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [activeHtmlPath, sidebarCollapsed]);
 
   useEffect(() => {
-    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+    }
   }, [sidebarCollapsed]);
 
   const clasesDbQuery = useQuery({
@@ -142,10 +151,28 @@ export function ClasesPage() {
 
   const clases = isSupabaseConfigured ? (clasesDbQuery.data ?? []) : previewClases;
 
+  const latestActiveClase = useMemo(() => {
+    const unlocked = clases.filter((c) => c.desbloqueada);
+    return unlocked[unlocked.length - 1] ?? clases[0] ?? null;
+  }, [clases]);
+
+  const activeClaseNum = selectedClaseNum ?? latestActiveClase?.numero ?? 0;
+
+  useEffect(() => {
+    if (!latestActiveClase) return;
+    setOpenFases((prev) => (prev[latestActiveClase.fase] ? prev : { ...prev, [latestActiveClase.fase]: true }));
+  }, [latestActiveClase]);
+
   const selectedClase = useMemo(
-    () => clases.find((c) => c.numero === selectedClaseNum) ?? clases[0] ?? null,
-    [clases, selectedClaseNum],
+    () => clases.find((c) => c.numero === activeClaseNum) ?? latestActiveClase,
+    [clases, activeClaseNum, latestActiveClase],
   );
+
+  function closeDrawerOnMobile() {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }
 
   const canReadSelectedClase = Boolean(
     selectedClase && (selectedClase.desbloqueada || esStaff || !isSupabaseConfigured),
@@ -298,12 +325,26 @@ export function ClasesPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] w-full">
-      {/* Sidebar colapsable */}
+    <div className="relative flex min-h-[calc(100vh-3.5rem)] w-full">
+      {/* Backdrop móvil cuando el menú lateral está expandido (evita apretar el contenido) */}
+      {!sidebarCollapsed && (
+        <div
+          aria-hidden="true"
+          onClick={() => setSidebarCollapsed(true)}
+          className="fixed inset-0 top-14 z-30 bg-black/50 backdrop-blur-[1px] md:hidden"
+        />
+      )}
+
+      {/* Espaciador en móvil para que el contenido no salte cuando el drawer flota encima */}
+      {!sidebarCollapsed && <div aria-hidden="true" className="w-12 shrink-0 md:hidden" />}
+
+      {/* Sidebar colapsable (drawer flotante en móvil, fijo en desktop) */}
       <aside
         aria-label="Índice de clases y documentación"
         className={`shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)] transition-[width] duration-200 ${
-          sidebarCollapsed ? 'w-12' : 'w-60'
+          sidebarCollapsed
+            ? 'w-12'
+            : 'fixed inset-y-0 left-0 top-14 z-40 w-64 shadow-xl md:static md:z-auto md:w-60 md:shadow-none'
         }`}
       >
         {sidebarCollapsed ? (
@@ -322,7 +363,7 @@ export function ClasesPage() {
 
             <div className="flex flex-col items-center gap-1">
               {clases.map((clase) => {
-                const active = !selectedDocPath && selectedClaseNum === clase.numero;
+                const active = !selectedDocPath && activeClaseNum === clase.numero;
                 const locked = !clase.desbloqueada;
                 return (
                   <button
@@ -396,7 +437,7 @@ export function ClasesPage() {
                     {isOpen && (
                       <ul className="mt-1 space-y-0.5">
                         {items.map((clase) => {
-                          const active = !selectedDocPath && selectedClaseNum === clase.numero;
+                          const active = !selectedDocPath && activeClaseNum === clase.numero;
                           const locked = !clase.desbloqueada;
                           const shortLabel =
                             clase.numero === 0
@@ -410,6 +451,7 @@ export function ClasesPage() {
                                 onClick={() => {
                                   setSelectedDocPath(null);
                                   setSelectedClaseNum(clase.numero);
+                                  closeDrawerOnMobile();
                                 }}
                                 className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${
                                   active
@@ -460,7 +502,10 @@ export function ClasesPage() {
                     <li key={doc.path}>
                       <button
                         type="button"
-                        onClick={() => setSelectedDocPath(doc.path)}
+                        onClick={() => {
+                          setSelectedDocPath(doc.path);
+                          closeDrawerOnMobile();
+                        }}
                         className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm capitalize transition ${
                           active
                             ? 'bg-[var(--bg-hover)] font-medium text-[var(--text-primary)]'
