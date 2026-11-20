@@ -1,5 +1,5 @@
--- Schema inicial para el Campus del Bootcamp (Supabase / PostgreSQL)
--- Ejecutar en el SQL Editor de tu proyecto Supabase
+-- Schema para WTDev Campus (Supabase / PostgreSQL)
+-- Seguro de re-ejecutar (idempotente) en el SQL Editor de tu proyecto Supabase
 
 -- 1. Perfiles / Usuarios de la plataforma (estudiantes, profesores + flag booleano independiente de administrador)
 create table if not exists public.alumnos (
@@ -19,7 +19,7 @@ create table if not exists public.alumnos (
   created_at timestamptz not null default now()
 );
 
--- 2. Agenda de Clases (conecta el banner de "Próxima clase" y sincronización con Google Calendar)
+-- 2. Agenda de Clases (conecta el banner de "Próxima clase", desbloqueo progresivo y Google Calendar)
 create table if not exists public.clases (
   id serial primary key,
   numero integer unique not null, -- 0 = Clase 0, 1..12 = Semanas
@@ -67,7 +67,29 @@ create table if not exists public.examenes (
   unique (alumno_id, hito, es_recuperatorio)
 );
 
--- Trigger: vincular automáticamente auth.users -> public.alumnos por email al registrarse
+-- Trigger genérico para actualizar updated_at automáticamente
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_entregas_updated_at on public.entregas;
+create trigger trg_entregas_updated_at
+  before update on public.entregas
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_examenes_updated_at on public.examenes;
+create trigger trg_examenes_updated_at
+  before update on public.examenes
+  for each row execute function public.set_updated_at();
+
+-- Triggers bidireccionales de vinculación auth.users <-> public.alumnos por email
+-- 1) Si el alumno se registra después de haber sido precargado en public.alumnos
 create or replace function public.vincular_alumno_on_auth_signup()
 returns trigger
 language plpgsql
@@ -87,6 +109,36 @@ drop trigger if exists on_auth_user_created_vincular_alumno on auth.users;
 create trigger on_auth_user_created_vincular_alumno
   after insert on auth.users
   for each row execute function public.vincular_alumno_on_auth_signup();
+
+-- 2) Si el usuario ya existía en auth.users antes de insertarlo en public.alumnos
+create or replace function public.vincular_auth_on_alumno_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if new.user_id is null then
+    select id into new.user_id
+    from auth.users
+    where lower(email) = lower(new.email)
+    limit 1;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_alumno_insert_vincular_auth on public.alumnos;
+create trigger on_alumno_insert_vincular_auth
+  before insert on public.alumnos
+  for each row execute function public.vincular_auth_on_alumno_insert();
+
+-- Sincronización única por si ya había filas sin vincular antes de correr este script
+update public.alumnos a
+set user_id = u.id
+from auth.users u
+where lower(a.email) = lower(u.email)
+  and a.user_id is null;
 
 -- Habilitar Row Level Security (RLS)
 alter table public.alumnos enable row level security;
@@ -121,27 +173,39 @@ as $$
   );
 $$;
 
--- Políticas RLS
+-- Políticas RLS (idempotentes)
 -- Clases: cualquier usuario autenticado puede verlas; profesores y admins gestionan
+drop policy if exists "clases_select_auth" on public.clases;
 create policy "clases_select_auth" on public.clases for select to authenticated using (true);
+
+drop policy if exists "clases_staff_all" on public.clases;
 create policy "clases_staff_all" on public.clases for all to authenticated
   using (public.es_profesor_o_admin()) with check (public.es_profesor_o_admin());
 
 -- Alumnos: cada usuario ve su perfil; profesores y admins ven todos; solo admin gestiona altas/bajas/roles
+drop policy if exists "alumnos_select_self_or_staff" on public.alumnos;
 create policy "alumnos_select_self_or_staff" on public.alumnos for select to authenticated
   using (user_id = auth.uid() or public.es_profesor_o_admin());
+
+drop policy if exists "alumnos_admin_all" on public.alumnos;
 create policy "alumnos_admin_all" on public.alumnos for all to authenticated
   using (public.es_admin()) with check (public.es_admin());
 
 -- Entregas: cada estudiante ve las suyas; profesores y admins gestionan todas
+drop policy if exists "entregas_select_self_or_staff" on public.entregas;
 create policy "entregas_select_self_or_staff" on public.entregas for select to authenticated
   using (public.es_profesor_o_admin() or alumno_id in (select id from public.alumnos where user_id = auth.uid()));
+
+drop policy if exists "entregas_staff_all" on public.entregas;
 create policy "entregas_staff_all" on public.entregas for all to authenticated
   using (public.es_profesor_o_admin()) with check (public.es_profesor_o_admin());
 
 -- Exámenes: cada estudiante ve los suyos; profesores y admins gestionan todos
+drop policy if exists "examenes_select_self_or_staff" on public.examenes;
 create policy "examenes_select_self_or_staff" on public.examenes for select to authenticated
   using (public.es_profesor_o_admin() or alumno_id in (select id from public.alumnos where user_id = auth.uid()));
+
+drop policy if exists "examenes_staff_all" on public.examenes;
 create policy "examenes_staff_all" on public.examenes for all to authenticated
   using (public.es_profesor_o_admin()) with check (public.es_profesor_o_admin());
 

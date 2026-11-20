@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { BRAND_NAME } from '../lib/brand';
 import { Button } from '../components/ui/Button';
 
 const sections = [
@@ -30,10 +31,10 @@ export function HomePage() {
     <div className="space-y-10">
       <div className="max-w-2xl space-y-4">
         <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Campus Web · 12 Semanas
+          {BRAND_NAME} · 12 Semanas
         </p>
         <h1 className="text-3xl font-bold tracking-tight text-[var(--text-primary)] sm:text-4xl">
-          Bootcamp de Programación Web desde Cero
+          {BRAND_NAME} — Programación Web desde Cero
         </h1>
         <p className="text-base leading-relaxed text-[var(--text-secondary)]">
           Todo el material del curso, las consignas semanales y el seguimiento de entregas en un

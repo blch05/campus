@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LogIn, LogOut, Moon, Shield, Sun } from 'lucide-react';
+import { BRAND_NAME } from '../../lib/brand';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useThemeStore } from '../../store/useThemeStore';
@@ -36,7 +37,7 @@ export function AppLayout() {
               to="/"
               className="text-sm font-semibold tracking-tight text-[var(--text-primary)]"
             >
-              Bootcamp Web TS
+              {BRAND_NAME}
             </Link>
 
             <nav className="flex items-center gap-1" aria-label="Navegación principal">

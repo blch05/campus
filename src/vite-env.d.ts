@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_GITHUB_OWNER?: string;
   readonly VITE_GITHUB_REPO?: string;
   readonly VITE_CUSTOM_DOMAIN?: string;
+  readonly VITE_CAMPUS_NAME?: string;
 }
 
 interface ImportMeta {

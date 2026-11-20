@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { BRAND_NAME } from '../lib/brand';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -63,7 +64,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-canvas)] px-4 text-[var(--text-primary)]">
       <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-8">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-          Bootcamp Web TS
+          {BRAND_NAME}
         </p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--text-primary)]">
           {modo === 'login' ? 'Iniciar sesión' : 'Activar tu cuenta'}
