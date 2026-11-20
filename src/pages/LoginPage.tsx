@@ -1,11 +1,25 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { FormInput } from '../components/ui/FormField';
 import { BRAND_NAME } from '../lib/brand';
+import { formatAppError, parseAppError, type AppError } from '../lib/errors';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
 type ModoAuth = 'login' | 'registro';
+
+interface FieldErrors {
+  nombre?: string;
+  githubUsername?: string;
+  email?: string;
+  password?: string;
+}
+
+const GITHUB_USER_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_ATTEMPTS = 5;
+const COOLDOWN_SECONDS = 30;
 
 export function LoginPage() {
   const location = useLocation();
@@ -16,9 +30,23 @@ export function LoginPage() {
   const [githubUsername, setGithubUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [appError, setAppError] = useState<AppError | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
+
+  // Rate limit / cooldown en cliente tras varios intentos fallidos
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  useEffect(() => {
+    if (cooldownLeft <= 0) return;
+    const timer = window.setInterval(() => {
+      setCooldownLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownLeft]);
 
   const redirectTo = (location.state as { from?: string } | null)?.from ?? '/';
 
@@ -26,24 +54,88 @@ export function LoginPage() {
     return <Navigate to={redirectTo} replace />;
   }
 
+  function validateForm(): FieldErrors {
+    const errors: FieldErrors = {};
+    const cleanEmail = email.trim();
+
+    if (modo === 'registro') {
+      const cleanNombre = nombre.trim();
+      if (!cleanNombre) {
+        errors.nombre = 'El nombre es obligatorio.';
+      } else if (cleanNombre.length < 2) {
+        errors.nombre = 'Ingresá al menos 2 caracteres.';
+      } else if (cleanNombre.length > 80) {
+        errors.nombre = 'Máximo 80 caracteres.';
+      }
+
+      const cleanGh = githubUsername.trim().replace(/^@/, '');
+      if (!cleanGh) {
+        errors.githubUsername = 'El usuario de GitHub es obligatorio.';
+      } else if (!GITHUB_USER_REGEX.test(cleanGh)) {
+        errors.githubUsername = 'Solo letras, números y guiones (1 a 39 caracteres, sin @).';
+      }
+    }
+
+    if (!cleanEmail) {
+      errors.email = 'El correo electrónico es obligatorio.';
+    } else if (!EMAIL_REGEX.test(cleanEmail)) {
+      errors.email = 'Ingresá un correo electrónico válido.';
+    }
+
+    if (!password) {
+      errors.password = 'La contraseña es obligatoria.';
+    } else if (password.length < 6) {
+      errors.password = 'Mínimo 6 caracteres.';
+    }
+
+    return errors;
+  }
+
+  function registerFailure(err: AppError) {
+    setAppError(err);
+    const next = failedAttempts + 1;
+    if (next >= MAX_ATTEMPTS) {
+      setFailedAttempts(0);
+      setCooldownLeft(COOLDOWN_SECONDS);
+    } else {
+      setFailedAttempts(next);
+    }
+  }
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (cooldownLeft > 0) return;
+
+    const errors = validateForm();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setAppError({
+        code: 'VAL_FORM_INVALID',
+        message: 'Revisá los campos marcados en rojo antes de continuar.',
+      });
+      return;
+    }
+
     if (!supabase) {
-      setErrorMsg('Supabase no está configurado en .env.');
+      setAppError({
+        code: 'CFG_SUPABASE_MISSING',
+        message: 'Supabase no está configurado en .env.',
+      });
       return;
     }
 
     setSubmitting(true);
-    setErrorMsg(null);
+    setAppError(null);
     setInfoMsg(null);
 
     try {
       if (modo === 'login') {
         const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password,
         });
         if (error) throw error;
+        setFailedAttempts(0);
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
@@ -57,16 +149,21 @@ export function LoginPage() {
         });
         if (error) throw error;
         if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-          setErrorMsg('Ese correo ya está registrado. Iniciá sesión con tu contraseña.');
+          registerFailure({
+            code: 'AUTH_DUPLICATE_EMAIL',
+            message: 'Ese correo ya está registrado. Iniciá sesión con tu contraseña.',
+          });
+          setFieldErrors({ email: 'Este correo ya tiene una cuenta.' });
           return;
         }
+        setFailedAttempts(0);
         setInfoMsg(
           'Cuenta creada y vinculada automáticamente. Si tenés confirmación por correo activa en Supabase, revisá tu bandeja; si no, ya podés iniciar sesión.',
         );
         setModo('login');
       }
     } catch (err) {
-      setErrorMsg((err as Error).message);
+      registerFailure(parseAppError(err));
     } finally {
       setSubmitting(false);
     }
@@ -84,19 +181,29 @@ export function LoginPage() {
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {modo === 'login'
             ? 'Ingresá con tu correo y contraseña.'
-            : 'Completá tus datos para crear tu perfil de estudiante automáticamente.'}
+            : 'Los campos marcados con * son obligatorios.'}
         </p>
 
         {!isSupabaseConfigured && (
           <div className="mt-4 rounded-md border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] p-3 text-xs text-[var(--status-warn-fg)]">
-            Faltan <code>VITE_SUPABASE_URL</code> y <code>VITE_SUPABASE_ANON_KEY</code> en{' '}
+            [CFG_ENV] Faltan <code>VITE_SUPABASE_URL</code> y <code>VITE_SUPABASE_ANON_KEY</code> en{' '}
             <code>.env</code>.
           </div>
         )}
 
-        {errorMsg && (
-          <div className="mt-4 rounded-md border border-[var(--status-err-border)] bg-[var(--status-err-bg)] p-3 text-xs text-[var(--status-err-fg)]">
-            {errorMsg}
+        {appError && (
+          <div
+            role="alert"
+            className="mt-4 rounded-md border border-[var(--status-err-border)] bg-[var(--status-err-bg)] p-3 text-xs text-[var(--status-err-fg)]"
+          >
+            <span className="font-mono font-semibold">[{appError.code}]</span> {appError.message}
+          </div>
+        )}
+
+        {cooldownLeft > 0 && (
+          <div className="mt-3 rounded-md border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] p-3 text-xs text-[var(--status-warn-fg)]">
+            [CLIENT_RATE_LIMIT] Demasiados intentos fallidos. Esperá{' '}
+            <strong className="font-mono">{cooldownLeft}s</strong> para reintentar.
           </div>
         )}
 
@@ -106,83 +213,84 @@ export function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-4">
           {modo === 'registro' && (
             <>
-              <div>
-                <label htmlFor="nombre" className="block text-xs font-medium text-[var(--text-primary)]">
-                  Nombre completo
-                </label>
-                <input
-                  id="nombre"
-                  type="text"
-                  required
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Tu nombre y apellido"
-                  className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-                />
-              </div>
+              <FormInput
+                id="nombre"
+                label="Nombre completo"
+                required
+                showCount
+                maxLength={80}
+                value={nombre}
+                onChange={(e) => {
+                  setNombre(e.target.value);
+                  setFieldErrors((p) => ({ ...p, nombre: undefined }));
+                }}
+                placeholder="Tu nombre y apellido"
+                error={fieldErrors.nombre}
+              />
 
-              <div>
-                <label htmlFor="github" className="block text-xs font-medium text-[var(--text-primary)]">
-                  Usuario de GitHub
-                </label>
-                <input
-                  id="github"
-                  type="text"
-                  required
-                  value={githubUsername}
-                  onChange={(e) => setGithubUsername(e.target.value)}
-                  placeholder="tu-usuario-github"
-                  className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-                />
-              </div>
+              <FormInput
+                id="github"
+                label="Usuario de GitHub"
+                required
+                showCount
+                maxLength={39}
+                value={githubUsername}
+                onChange={(e) => {
+                  setGithubUsername(e.target.value);
+                  setFieldErrors((p) => ({ ...p, githubUsername: undefined }));
+                }}
+                placeholder="tu-usuario-github"
+                error={fieldErrors.githubUsername}
+              />
             </>
           )}
 
-          <div>
-            <label htmlFor="email" className="block text-xs font-medium text-[var(--text-primary)]">
-              Correo electrónico
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu-email@ejemplo.com"
-              className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-            />
-          </div>
+          <FormInput
+            id="email"
+            label="Correo electrónico"
+            type="email"
+            required
+            maxLength={120}
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setFieldErrors((p) => ({ ...p, email: undefined }));
+            }}
+            placeholder="tu-email@ejemplo.com"
+            error={fieldErrors.email}
+          />
 
-          <div>
-            <label htmlFor="password" className="block text-xs font-medium text-[var(--text-primary)]">
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-            />
-          </div>
+          <FormInput
+            id="password"
+            label="Contraseña"
+            type="password"
+            required
+            maxLength={72}
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setFieldErrors((p) => ({ ...p, password: undefined }));
+            }}
+            placeholder="Mínimo 6 caracteres"
+            error={fieldErrors.password}
+          />
 
           <Button
             type="submit"
             variant="primary"
-            disabled={submitting || !isSupabaseConfigured}
+            disabled={submitting || !isSupabaseConfigured || cooldownLeft > 0}
             className="w-full"
           >
             {submitting
               ? 'Procesando...'
-              : modo === 'login'
-                ? 'Entrar al Campus'
-                : 'Crear contraseña'}
+              : cooldownLeft > 0
+                ? `Esperá ${cooldownLeft}s...`
+                : modo === 'login'
+                  ? 'Entrar al Campus'
+                  : 'Crear cuenta'}
           </Button>
         </form>
 
@@ -194,11 +302,12 @@ export function LoginPage() {
                 type="button"
                 onClick={() => {
                   setModo('registro');
-                  setErrorMsg(null);
+                  setAppError(null);
+                  setFieldErrors({});
                 }}
                 className="font-medium text-[var(--text-primary)] underline underline-offset-2"
               >
-                Activá tu cuenta
+                Creá tu cuenta
               </button>
             </>
           ) : (
@@ -208,7 +317,8 @@ export function LoginPage() {
                 type="button"
                 onClick={() => {
                   setModo('login');
-                  setErrorMsg(null);
+                  setAppError(null);
+                  setFieldErrors({});
                 }}
                 className="font-medium text-[var(--text-primary)] underline underline-offset-2"
               >
@@ -221,3 +331,5 @@ export function LoginPage() {
     </div>
   );
 }
+
+export { formatAppError };

@@ -4,6 +4,7 @@ import { Lock, Plus, Unlock } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
+import { formatAppError, parseAppError } from '../lib/errors';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import type {
@@ -64,7 +65,7 @@ export function LibretaPage() {
   const [exRecup, setExRecup] = useState(false);
   const [exObs, setExObs] = useState('');
 
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const clasesQuery = useQuery({
     queryKey: ['supabase', 'clases'],
@@ -148,10 +149,10 @@ export function LibretaPage() {
       setNewGithub('');
       setNewRol('estudiante');
       setNewEsAdmin(false);
-      setFeedback('Usuario agregado correctamente.');
+      setFeedback({ type: 'ok', text: 'Usuario agregado correctamente.' });
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'alumnos'] });
     },
-    onError: (err) => setFeedback(`Error: ${(err as Error).message}`),
+    onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
   });
 
   const upsertEntregaMutation = useMutation({
@@ -171,10 +172,10 @@ export function LibretaPage() {
     onSuccess: () => {
       setEntPrNum('');
       setEntObs('');
-      setFeedback('Entrega guardada.');
+      setFeedback({ type: 'ok', text: 'Entrega guardada.' });
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'entregas'] });
     },
-    onError: (err) => setFeedback(`Error: ${(err as Error).message}`),
+    onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
   });
 
   const previewNotaFinal = (() => {
@@ -218,10 +219,10 @@ export function LibretaPage() {
       setExLive('');
       setExEntregable('');
       setExObs('');
-      setFeedback('Nota de examen guardada.');
+      setFeedback({ type: 'ok', text: 'Nota de examen guardada.' });
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'examenes'] });
     },
-    onError: (err) => setFeedback(`Error: ${(err as Error).message}`),
+    onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
   });
 
   const alumnos = alumnosQuery.data ?? [];
@@ -291,8 +292,15 @@ export function LibretaPage() {
       </div>
 
       {feedback && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs text-[var(--text-primary)]">
-          {feedback}
+        <div
+          role={feedback.type === 'error' ? 'alert' : 'status'}
+          className={`rounded-lg border px-4 py-2.5 text-xs ${
+            feedback.type === 'error'
+              ? 'border-[var(--status-err-border)] bg-[var(--status-err-bg)] text-[var(--status-err-fg)]'
+              : 'border-[var(--status-ok-border)] bg-[var(--status-ok-bg)] text-[var(--status-ok-fg)]'
+          }`}
+        >
+          {feedback.text}
         </div>
       )}
 
@@ -427,7 +435,8 @@ export function LibretaPage() {
 
               <input
                 type="text"
-                placeholder="Observación opcional..."
+                maxLength={300}
+                placeholder="Observación opcional (máx. 300 caracteres)..."
                 value={entObs}
                 onChange={(e) => setEntObs(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)] sm:col-span-6"
@@ -665,7 +674,9 @@ export function LibretaPage() {
             >
               <input
                 required
-                placeholder="Nombre completo"
+                minLength={2}
+                maxLength={80}
+                placeholder="Nombre completo *"
                 value={newNombre}
                 onChange={(e) => setNewNombre(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
@@ -673,14 +684,16 @@ export function LibretaPage() {
               <input
                 required
                 type="email"
-                placeholder="Email"
+                maxLength={120}
+                placeholder="Email *"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
               />
               <input
                 required
-                placeholder="Usuario GitHub"
+                maxLength={39}
+                placeholder="Usuario GitHub *"
                 value={newGithub}
                 onChange={(e) => setNewGithub(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"

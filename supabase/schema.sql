@@ -23,6 +23,20 @@ create table if not exists public.alumnos (
 alter table public.alumnos add column if not exists es_admin boolean not null default false;
 alter table public.alumnos add column if not exists mvp_api_url text;
 
+-- Validaciones de longitud en BD (idempotentes)
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'alumnos_nombre_len_chk') then
+    alter table public.alumnos add constraint alumnos_nombre_len_chk check (char_length(trim(nombre)) between 2 and 80);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'alumnos_github_len_chk') then
+    alter table public.alumnos add constraint alumnos_github_len_chk check (char_length(trim(github_username)) between 1 and 39);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'alumnos_email_len_chk') then
+    alter table public.alumnos add constraint alumnos_email_len_chk check (char_length(trim(email)) <= 120);
+  end if;
+end $$;
+
 -- 2. Agenda de Clases (conecta el banner de "Próxima clase", desbloqueo progresivo y Google Calendar)
 create table if not exists public.clases (
   id serial primary key,

@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js';
 import { create } from 'zustand';
+import { formatAppError, parseAppError } from '../lib/errors';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { Alumno } from '../types/database';
 
@@ -48,11 +49,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       .maybeSingle();
 
     if (error) {
+      const parsed = parseAppError(error);
       console.error('[WTDev Auth] Error al cargar perfil desde public.alumnos:', error);
       set({
         perfil: null,
         perfilLoading: false,
-        perfilError: `${error.code ?? ''} ${error.message}`.trim(),
+        perfilError: formatAppError(parsed),
       });
       return;
     }
