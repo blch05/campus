@@ -1,13 +1,22 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ExternalLink, FileCode2, Maximize2, ShieldAlert } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  CheckCircle2,
+  ExternalLink,
+  FileCode2,
+  Maximize2,
+  RefreshCw,
+  ShieldAlert,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import {
+  clearGitHubCache,
+  githubConfig,
   isGitHubConfigured,
   listOpenPullRequests,
   listPullRequestFiles,
@@ -18,7 +27,18 @@ import type { GitHubPullRequest } from '../types/github';
 const IGNORED_FILES = new Set(['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']);
 
 export function EvaluadorPRsPage() {
+  const queryClient = useQueryClient();
   const [selectedPR, setSelectedPR] = useState<GitHubPullRequest | null>(null);
+
+  function handleRefreshPRs() {
+    clearGitHubCache('pr');
+    void queryClient.invalidateQueries({ queryKey: ['github', 'prs'] });
+    void queryClient.invalidateQueries({ queryKey: ['github', 'pr-files'] });
+  }
+
+  const repoPullsUrl = isGitHubConfigured
+    ? `https://github.com/${githubConfig.owner}/${githubConfig.repo}/pulls`
+    : null;
 
   const prsQuery = useQuery({
     queryKey: ['github', 'prs', 'open'],
@@ -71,11 +91,23 @@ export function EvaluadorPRsPage() {
     <div className="grid gap-6 lg:grid-cols-12">
       {/* Lista de PRs */}
       <aside className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-4 lg:col-span-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h1 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             Pull Requests Abiertos
           </h1>
-          {prsQuery.data && <Badge variant="neutral">{prsQuery.data.length}</Badge>}
+          <div className="flex items-center gap-1.5">
+            {prsQuery.data && <Badge variant="neutral">{prsQuery.data.length}</Badge>}
+            {isGitHubConfigured && (
+              <button
+                type="button"
+                onClick={handleRefreshPRs}
+                title="Actualizar Pull Requests desde GitHub"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${prsQuery.isFetching ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
 
         {!isGitHubConfigured && (
@@ -90,6 +122,25 @@ export function EvaluadorPRsPage() {
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
             <Spinner label="Buscando Pull Requests..." className="pt-1" />
+          </div>
+        )}
+
+        {prsQuery.isError && (
+          <div className="space-y-2.5 rounded-lg border border-[var(--status-err-fg)]/30 bg-[var(--status-err-bg)] p-3 text-xs text-[var(--status-err-fg)]">
+            <p className="font-medium">{(prsQuery.error as Error).message}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={handleRefreshPRs}>
+                <RefreshCw className="h-3 w-3" />
+                Reintentar
+              </Button>
+              {repoPullsUrl && (
+                <a href={repoPullsUrl} target="_blank" rel="noreferrer">
+                  <Button variant="secondary" size="sm">
+                    Ver en GitHub <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </a>
+              )}
+            </div>
           </div>
         )}
 
@@ -237,6 +288,10 @@ export function EvaluadorPRsPage() {
                   <Skeleton className="h-5 w-full" />
                   <Skeleton className="h-5 w-4/5" />
                 </div>
+              ) : filesQuery.isError ? (
+                <p className="text-xs text-[var(--status-err-fg)]">
+                  {(filesQuery.error as Error).message}
+                </p>
               ) : (
                 <ul className="divide-y divide-[var(--border)] font-mono text-xs">
                   {codeFiles.map((f) => (

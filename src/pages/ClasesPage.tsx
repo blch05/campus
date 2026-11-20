@@ -10,6 +10,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Presentation,
+  RefreshCw,
   Unlock,
   X,
 } from 'lucide-react';
@@ -18,7 +19,13 @@ import remarkGfm from 'remark-gfm';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
-import { fetchMarkdownFile, githubConfig, isGitHubConfigured, listRepoPath } from '../lib/github';
+import {
+  clearGitHubCache,
+  fetchMarkdownFile,
+  githubConfig,
+  isGitHubConfigured,
+  listRepoPath,
+} from '../lib/github';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Clase } from '../types/database';
@@ -190,18 +197,24 @@ export function ClasesPage() {
     ? `https://github.com/${githubConfig.owner}/${githubConfig.repo}`
     : null;
 
-  const docsList = isGitHubConfigured
-    ? (docsQuery.data ?? []).map((d) => ({
-        name: d.name,
-        label: d.name.replace(/\.md$/i, '').replace(/-/g, ' '),
-        path: d.path,
-      }))
-    : PREVIEW_DOCS;
+  const docsList =
+    isGitHubConfigured && (docsQuery.data?.length ?? 0) > 0
+      ? docsQuery.data!.map((d) => ({
+          name: d.name,
+          label: d.name.replace(/\.md$/i, '').replace(/-/g, ' '),
+          path: d.path,
+        }))
+      : PREVIEW_DOCS;
 
   const canToggleUnlock = esStaff || !isSupabaseConfigured;
   const isLockedForViewer = Boolean(
     !selectedDocPath && selectedClase && !selectedClase.desbloqueada && !canToggleUnlock,
   );
+
+  function handleRefreshGitHub() {
+    clearGitHubCache();
+    void queryClient.invalidateQueries({ queryKey: ['github'] });
+  }
 
   function toggleFase(fase: number) {
     setOpenFases((prev) => ({ ...prev, [fase]: !prev[fase] }));
@@ -469,16 +482,29 @@ export function ClasesPage() {
                 <span className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                   Documentación · {selectedDocPath}
                 </span>
-                {repoUrl && (
-                  <a
-                    href={`${repoUrl}/blob/main/${selectedDocPath}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    Ver en GitHub <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
+                <div className="flex items-center gap-3">
+                  {isGitHubConfigured && (
+                    <button
+                      type="button"
+                      onClick={handleRefreshGitHub}
+                      title="Actualizar contenido desde GitHub (limpiar caché)"
+                      className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Actualizar
+                    </button>
+                  )}
+                  {repoUrl && (
+                    <a
+                      href={`${repoUrl}/blob/main/${selectedDocPath}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    >
+                      Ver en GitHub <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
               </div>
 
               {isGitHubConfigured ? (
@@ -533,31 +559,44 @@ export function ClasesPage() {
                   )}
                 </div>
 
-                {canToggleUnlock && (
-                  <Button
-                    variant={selectedClase.desbloqueada ? 'secondary' : 'primary'}
-                    size="sm"
-                    disabled={toggleDesbloqueoMutation.isPending}
-                    onClick={() =>
-                      toggleDesbloqueoMutation.mutate({
-                        id: selectedClase.id,
-                        desbloqueada: !selectedClase.desbloqueada,
-                      })
-                    }
-                  >
-                    {selectedClase.desbloqueada ? (
-                      <>
-                        <Lock className="h-3.5 w-3.5" />
-                        Bloquear semana
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="h-3.5 w-3.5" />
-                        Desbloquear semana
-                      </>
-                    )}
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {isGitHubConfigured && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleRefreshGitHub}
+                      title="Actualizar consigna y materiales desde GitHub (limpiar caché)"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Actualizar
+                    </Button>
+                  )}
+                  {canToggleUnlock && (
+                    <Button
+                      variant={selectedClase.desbloqueada ? 'secondary' : 'primary'}
+                      size="sm"
+                      disabled={toggleDesbloqueoMutation.isPending}
+                      onClick={() =>
+                        toggleDesbloqueoMutation.mutate({
+                          id: selectedClase.id,
+                          desbloqueada: !selectedClase.desbloqueada,
+                        })
+                      }
+                    >
+                      {selectedClase.desbloqueada ? (
+                        <>
+                          <Lock className="h-3.5 w-3.5" />
+                          Bloquear semana
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="h-3.5 w-3.5" />
+                          Desbloquear semana
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {isLockedForViewer ? (
@@ -775,6 +814,7 @@ export function ClasesPage() {
                 title={activeHtmlPath}
                 srcDoc={htmlPresentationQuery.data ?? ''}
                 sandbox="allow-scripts"
+                allowFullScreen
                 className="h-full w-full border-0"
               />
             )}

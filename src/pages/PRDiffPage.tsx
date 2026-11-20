@@ -415,6 +415,10 @@ export function PRDiffPage() {
               <Skeleton className="h-64 w-full" />
               <Spinner label="Cargando diff completo..." />
             </div>
+          ) : filesQuery.isError ? (
+            <div className="rounded-lg border border-[var(--status-err-fg)]/30 bg-[var(--status-err-bg)] p-4 text-sm text-[var(--status-err-fg)]">
+              {(filesQuery.error as Error).message}
+            </div>
           ) : viewMode === 'single' ? (
             activeFileObj ? (
               <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-canvas)]">

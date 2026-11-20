@@ -6,18 +6,78 @@ import type {
 } from '../types/github';
 
 const GITHUB_API = 'https://api.github.com';
+const GITHUB_RAW = 'https://raw.githubusercontent.com';
+const CACHE_PREFIX = 'wtdev-gh-cache:';
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora
 
 export const githubConfig = {
   owner: import.meta.env.VITE_GITHUB_OWNER ?? '',
   repo: import.meta.env.VITE_GITHUB_REPO ?? '',
+  branch: import.meta.env.VITE_GITHUB_BRANCH || 'main',
+  token: import.meta.env.VITE_GITHUB_TOKEN ?? '',
 };
 
 export const isGitHubConfigured = Boolean(githubConfig.owner && githubConfig.repo);
 
+export class GitHubApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'GitHubApiError';
+    this.status = status;
+  }
+}
+
 function buildHeaders(): HeadersInit {
-  return {
+  const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
   };
+  if (githubConfig.token) {
+    headers.Authorization = `Bearer ${githubConfig.token}`;
+  }
+  return headers;
+}
+
+function readCache<T>(key: string, allowStale = false, ttlMs = CACHE_TTL_MS): T | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts: number; data: T };
+    if (!allowStale && Date.now() - parsed.ts > ttlMs) {
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // Si localStorage está lleno, limpiamos solo el caché de GitHub y reintentamos
+    try {
+      clearGitHubCache();
+      localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data }));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+}
+
+export function clearGitHubCache(subKey?: string): void {
+  try {
+    const prefix = CACHE_PREFIX + (subKey ?? '');
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefix)) keysToRemove.push(k);
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 async function fetchGitHub<T>(endpoint: string): Promise<T> {
@@ -28,46 +88,151 @@ async function fetchGitHub<T>(endpoint: string): Promise<T> {
     headers: buildHeaders(),
   });
   if (!response.ok) {
-    throw new Error(`Error de GitHub API (${response.status}): ${response.statusText}`);
+    if (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
+      const resetUnix = Number(response.headers.get('x-ratelimit-reset') ?? 0);
+      const resetTime = resetUnix
+        ? new Date(resetUnix * 1000).toLocaleTimeString('es-AR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'unos minutos';
+      throw new GitHubApiError(
+        403,
+        `Límite de consultas a GitHub API alcanzado (60/hora sin token). Se restablece a las ${resetTime}.`,
+      );
+    }
+    throw new GitHubApiError(
+      response.status,
+      `Error de GitHub API (${response.status}): ${response.statusText}`,
+    );
   }
   return (await response.json()) as T;
 }
 
-export function listRepoPath(path: string): Promise<GitHubContentItem[]> {
-  return fetchGitHub<GitHubContentItem[]>(
-    `/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${path}`,
+async function probeRawAdjuntos(folderPath: string): Promise<GitHubContentItem[]> {
+  const cleanFolder = folderPath.replace(/^\/+|\/+$/g, '');
+  const candidates = ['presentacion.html', 'datos.json'];
+  const found: GitHubContentItem[] = [];
+
+  await Promise.all(
+    candidates.map(async (name) => {
+      const filePath = `${cleanFolder}/${name}`;
+      const rawUrl = `${GITHUB_RAW}/${githubConfig.owner}/${githubConfig.repo}/${githubConfig.branch}/${filePath}`;
+      try {
+        const res = await fetch(rawUrl, { method: 'HEAD' });
+        if (res.ok) {
+          found.push({
+            name,
+            path: filePath,
+            type: 'file',
+            download_url: rawUrl,
+            html_url: `https://github.com/${githubConfig.owner}/${githubConfig.repo}/blob/${githubConfig.branch}/${filePath}`,
+          });
+        }
+      } catch {
+        // Ignore probe failures
+      }
+    }),
   );
+
+  return found;
+}
+
+export async function listRepoPath(path: string): Promise<GitHubContentItem[]> {
+  const cacheKey = `path:${githubConfig.owner}/${githubConfig.repo}:${path}`;
+  const cached = readCache<GitHubContentItem[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const data = await fetchGitHub<GitHubContentItem[]>(
+      `/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${path}`,
+    );
+    writeCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    const stale = readCache<GitHubContentItem[]>(cacheKey, true);
+    if (stale) return stale;
+
+    // Fallback sin cuota de API para carpetas de clases cuando hay 403 rate limit
+    if (err instanceof GitHubApiError && err.status === 403 && path.startsWith('clases/')) {
+      const probed = await probeRawAdjuntos(path);
+      if (probed.length > 0) {
+        writeCache(cacheKey, probed);
+        return probed;
+      }
+    }
+    throw err;
+  }
 }
 
 export async function fetchMarkdownFile(path: string): Promise<string> {
-  const item = await fetchGitHub<GitHubContentItem & { content?: string }>(
-    `/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${path}`,
-  );
-  if (!item.download_url) {
-    throw new Error(`No se encontró contenido descargable en ${path}`);
+  if (!isGitHubConfigured) {
+    throw new Error('Configurá VITE_GITHUB_OWNER y VITE_GITHUB_REPO en tu archivo .env.');
   }
-  const res = await fetch(item.download_url);
-  if (!res.ok) {
-    throw new Error(`No se pudo descargar ${path} (${res.status})`);
+  const cleanPath = path.replace(/^\/+/, '');
+  const cacheKey = `file:${githubConfig.owner}/${githubConfig.repo}:${githubConfig.branch}:${cleanPath}`;
+  const cached = readCache<string>(cacheKey);
+  if (cached !== null) return cached;
+
+  const rawUrl = `${GITHUB_RAW}/${githubConfig.owner}/${githubConfig.repo}/${githubConfig.branch}/${cleanPath}`;
+  try {
+    const res = await fetch(rawUrl);
+    if (!res.ok) {
+      throw new GitHubApiError(res.status, `No se pudo descargar ${cleanPath} (${res.status})`);
+    }
+    const text = await res.text();
+    writeCache(cacheKey, text);
+    return text;
+  } catch (err) {
+    const stale = readCache<string>(cacheKey, true);
+    if (stale !== null) return stale;
+    throw err;
   }
-  return res.text();
+}
+
+const PR_LIST_TTL_MS = 2 * 60 * 1000; // 2 min
+const PR_FILES_TTL_MS = 10 * 60 * 1000; // 10 min
+
+async function fetchGitHubCached<T>(
+  cacheKey: string,
+  endpoint: string,
+  ttlMs: number,
+): Promise<T> {
+  const cached = readCache<T>(cacheKey, false, ttlMs);
+  if (cached !== null) return cached;
+
+  try {
+    const data = await fetchGitHub<T>(endpoint);
+    writeCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    const stale = readCache<T>(cacheKey, true);
+    if (stale !== null) return stale;
+    throw err;
+  }
 }
 
 export function listOpenPullRequests(): Promise<GitHubPullRequest[]> {
-  return fetchGitHub<GitHubPullRequest[]>(
+  return fetchGitHubCached<GitHubPullRequest[]>(
+    `prs:${githubConfig.owner}/${githubConfig.repo}:open`,
     `/repos/${githubConfig.owner}/${githubConfig.repo}/pulls?state=open&per_page=50`,
+    PR_LIST_TTL_MS,
   );
 }
 
 export function getPullRequest(prNumber: number): Promise<GitHubPullRequest> {
-  return fetchGitHub<GitHubPullRequest>(
+  return fetchGitHubCached<GitHubPullRequest>(
+    `pr:${githubConfig.owner}/${githubConfig.repo}:${prNumber}`,
     `/repos/${githubConfig.owner}/${githubConfig.repo}/pulls/${prNumber}`,
+    PR_FILES_TTL_MS,
   );
 }
 
 export function listPullRequestFiles(prNumber: number): Promise<GitHubPullRequestFile[]> {
-  return fetchGitHub<GitHubPullRequestFile[]>(
+  return fetchGitHubCached<GitHubPullRequestFile[]>(
+    `pr-files:${githubConfig.owner}/${githubConfig.repo}:${prNumber}`,
     `/repos/${githubConfig.owner}/${githubConfig.repo}/pulls/${prNumber}/files?per_page=100`,
+    PR_FILES_TTL_MS,
   );
 }
 
