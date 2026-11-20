@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Lock, Plus, Unlock } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
@@ -35,12 +36,23 @@ const ESTADO_EXAMEN_BADGE: Record<EstadoExamen, 'neutral' | 'success' | 'warning
   baja: 'error',
 };
 
+const VALID_TABS: TabLibreta[] = ['cronograma', 'entregas', 'examenes', 'alumnos'];
+
 export function LibretaPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const esStaff = useAuthStore((s) => s.esStaff)();
   const esAdmin = useAuthStore((s) => s.esAdmin)();
 
-  const [tab, setTab] = useState<TabLibreta>('cronograma');
+  const rawTab = searchParams.get('tab') as TabLibreta | null;
+  const tab: TabLibreta =
+    rawTab && VALID_TABS.includes(rawTab) && (rawTab !== 'alumnos' || esStaff)
+      ? rawTab
+      : 'cronograma';
+
+  function setTab(next: TabLibreta) {
+    setSearchParams({ tab: next }, { replace: true });
+  }
 
   // Form: alta de alumno (solo admin)
   const [newNombre, setNewNombre] = useState('');
@@ -252,7 +264,7 @@ export function LibretaPage() {
   const tabs: { id: TabLibreta; label: string; visible: boolean }[] = [
     { id: 'cronograma', label: 'Cronograma', visible: true },
     { id: 'entregas', label: 'Entregas', visible: true },
-    { id: 'examenes', label: 'Exámenes (30/40/30)', visible: true },
+    { id: 'examenes', label: 'Exámenes', visible: true },
     { id: 'alumnos', label: 'Cohorte', visible: esStaff },
   ];
 
