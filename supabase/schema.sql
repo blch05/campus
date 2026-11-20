@@ -269,7 +269,7 @@ select
   mvp_repo_url,
   mvp_api_url
 from public.alumnos
-where rol = 'estudiante' and estado <> 'baja' and mvp_url is not null;
+where estado <> 'baja' and mvp_url is not null;
 
 revoke all on public.proyectos_cohorte from anon, public;
 grant select on public.proyectos_cohorte to authenticated;
