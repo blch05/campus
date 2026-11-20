@@ -1,8 +1,10 @@
 import type {
+  EntregaProyectoGitHub,
   EvaluacionRutaPR,
   GitHubContentItem,
   GitHubPullRequest,
   GitHubPullRequestFile,
+  GitHubTreeResponse,
 } from '../types/github';
 
 const GITHUB_API = 'https://api.github.com';
@@ -256,4 +258,133 @@ export function validarGuardianDeRutas(
     prefijoEsperado,
     archivosProhibidos,
   };
+}
+
+const ENTREGAS_TREE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+function formatCarpetaLabel(carpeta: string): string {
+  if (carpeta.toLowerCase() === 'mvp') return 'MVP Final';
+  return carpeta
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function extractHtmlTitle(rawUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(rawUrl);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = match?.[1]?.trim();
+    return title ? title.slice(0, 80) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMvpManifest(
+  rawUrl: string,
+): Promise<{ titulo?: string; url?: string; repo_url?: string } | null> {
+  try {
+    const res = await fetch(rawUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, unknown>;
+    return {
+      titulo: typeof data.titulo === 'string' ? data.titulo.trim() : undefined,
+      url: typeof data.url === 'string' ? data.url.trim() : undefined,
+      repo_url: typeof data.repo_url === 'string' ? data.repo_url.trim() : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function listEntregasProyectos(): Promise<EntregaProyectoGitHub[]> {
+  if (!isGitHubConfigured) return [];
+
+  const { owner, repo, branch } = githubConfig;
+  const cacheKey = `entregas-tree:${owner}/${repo}:${branch}`;
+  const treeRes = await fetchGitHubCached<GitHubTreeResponse>(
+    cacheKey,
+    `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+    ENTREGAS_TREE_TTL_MS,
+  );
+
+  // Agrupar archivos dentro de entregas/<usuario>/<carpeta>/...
+  const groups = new Map<
+    string,
+    { username: string; carpeta: string; files: string[] }
+  >();
+
+  for (const entry of treeRes.tree) {
+    if (entry.type !== 'blob') continue;
+    const match = entry.path.match(/^entregas\/([^/]+)\/([^/]+)\/(.+)$/);
+    if (!match) continue;
+    const [, username, carpeta, relFile] = match;
+    const id = `${username}/${carpeta}`;
+    const existing = groups.get(id);
+    if (existing) {
+      existing.files.push(relFile);
+    } else {
+      groups.set(id, { username, carpeta, files: [relFile] });
+    }
+  }
+
+  const proyectos = await Promise.all(
+    Array.from(groups.entries()).map(async ([id, group]): Promise<EntregaProyectoGitHub> => {
+      const baseFolder = `entregas/${group.username}/${group.carpeta}`;
+      const defaultRepoUrl = `https://github.com/${owner}/${repo}/tree/${branch}/${baseFolder}`;
+      const hasMvpJson = group.files.some((f) => f.toLowerCase() === 'mvp.json');
+      const indexFile = group.files.find((f) => f.toLowerCase() === 'index.html');
+
+      if (hasMvpJson) {
+        const rawManifest = `${GITHUB_RAW}/${owner}/${repo}/${branch}/${baseFolder}/mvp.json`;
+        const manifest = await fetchMvpManifest(rawManifest);
+        return {
+          id,
+          github_username: group.username,
+          carpeta: group.carpeta,
+          titulo: manifest?.titulo || `MVP — @${group.username}`,
+          preview_url: manifest?.url || null,
+          repo_url: manifest?.repo_url || defaultRepoUrl,
+          tipo: 'mvp',
+          archivos: group.files.length,
+        };
+      }
+
+      if (indexFile) {
+        const rawHtml = `${GITHUB_RAW}/${owner}/${repo}/${branch}/${baseFolder}/${indexFile}`;
+        const htmlTitle = await extractHtmlTitle(rawHtml);
+        return {
+          id,
+          github_username: group.username,
+          carpeta: group.carpeta,
+          titulo: htmlTitle || formatCarpetaLabel(group.carpeta),
+          preview_url: `https://raw.githack.com/${owner}/${repo}/${branch}/${baseFolder}/${indexFile}`,
+          repo_url: defaultRepoUrl,
+          tipo: 'web',
+          archivos: group.files.length,
+        };
+      }
+
+      return {
+        id,
+        github_username: group.username,
+        carpeta: group.carpeta,
+        titulo: formatCarpetaLabel(group.carpeta),
+        preview_url: null,
+        repo_url: defaultRepoUrl,
+        tipo: 'codigo',
+        archivos: group.files.length,
+      };
+    }),
+  );
+
+  return proyectos.sort((a, b) => {
+    if (a.tipo === 'mvp' && b.tipo !== 'mvp') return -1;
+    if (b.tipo === 'mvp' && a.tipo !== 'mvp') return 1;
+    const folderCmp = b.carpeta.localeCompare(a.carpeta);
+    if (folderCmp !== 0) return folderCmp;
+    return a.github_username.localeCompare(b.github_username);
+  });
 }

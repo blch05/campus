@@ -33,3 +33,25 @@ export interface EvaluacionRutaPR {
   prefijoEsperado: string;
   archivosProhibidos: string[];
 }
+
+export interface GitHubTreeEntry {
+  path: string;
+  type: 'blob' | 'tree';
+}
+
+export interface GitHubTreeResponse {
+  sha: string;
+  tree: GitHubTreeEntry[];
+  truncated: boolean;
+}
+
+export interface EntregaProyectoGitHub {
+  id: string;
+  github_username: string;
+  carpeta: string;
+  titulo: string;
+  preview_url: string | null;
+  repo_url: string;
+  tipo: 'web' | 'mvp' | 'codigo';
+  archivos: number;
+}
