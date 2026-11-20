@@ -17,29 +17,8 @@ import type { GitHubPullRequest } from '../types/github';
 
 const IGNORED_FILES = new Set(['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']);
 
-function renderDiffLines(patch: string) {
-  return patch.split('\n').map((line, idx) => {
-    let rowClass = 'text-[var(--text-secondary)]';
-    if (line.startsWith('@@')) {
-      rowClass = 'bg-[var(--bg-hover)] text-[var(--text-muted)] font-semibold';
-    } else if (line.startsWith('+') && !line.startsWith('+++')) {
-      rowClass = 'bg-[var(--status-ok-bg)] text-[var(--status-ok-fg)]';
-    } else if (line.startsWith('-') && !line.startsWith('---')) {
-      rowClass = 'bg-[var(--status-err-bg)] text-[var(--status-err-fg)]';
-    }
-
-    return (
-      <div key={idx} className={`whitespace-pre px-3 py-0.5 font-mono text-xs leading-5 ${rowClass}`}>
-        {line || ' '}
-      </div>
-    );
-  });
-}
-
 export function EvaluadorPRsPage() {
   const [selectedPR, setSelectedPR] = useState<GitHubPullRequest | null>(null);
-  const [fileFilter, setFileFilter] = useState('');
-  const [expandAll, setExpandAll] = useState(true);
 
   const prsQuery = useQuery({
     queryKey: ['github', 'prs', 'open'],
@@ -79,15 +58,14 @@ export function EvaluadorPRsPage() {
     return { add, del, junk };
   }, [allFiles]);
 
-  const codeFiles = useMemo(() => {
-    const q = fileFilter.trim().toLowerCase();
-    return allFiles.filter((f) => {
-      const base = f.filename.split('/').pop() ?? '';
-      if (IGNORED_FILES.has(base) || !f.patch) return false;
-      if (q && !f.filename.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [allFiles, fileFilter]);
+  const codeFiles = useMemo(
+    () =>
+      allFiles.filter((f) => {
+        const base = f.filename.split('/').pop() ?? '';
+        return !IGNORED_FILES.has(base);
+      }),
+    [allFiles],
+  );
 
   return (
     <div className="grid gap-6 lg:grid-cols-12">
@@ -128,10 +106,7 @@ export function EvaluadorPRsPage() {
               <li key={pr.number}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedPR(pr);
-                    setFileFilter('');
-                  }}
+                  onClick={() => setSelectedPR(pr)}
                   className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition ${
                     active
                       ? 'border-[var(--text-primary)] bg-[var(--bg-canvas)]'
@@ -158,7 +133,7 @@ export function EvaluadorPRsPage() {
         </ul>
       </aside>
 
-      {/* Auditoría del PR seleccionado */}
+      {/* Resumen ejecutivo del PR seleccionado */}
       <section className="space-y-5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-6 lg:col-span-8">
         {!selectedPR ? (
           <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
@@ -167,13 +142,12 @@ export function EvaluadorPRsPage() {
               Seleccioná un Pull Request para auditarlo
             </p>
             <p className="mt-1 max-w-sm text-xs text-[var(--text-secondary)]">
-              Vas a ver el estado del Guardián de Rutas, la declaración honesta de IA y el diff
-              coloreado solo del código modificado.
+              Vas a ver el estado del Guardián de Rutas, la declaración honesta de IA y el acceso al
+              visor de diff en pantalla completa.
             </p>
           </div>
         ) : (
           <>
-            {/* Cabecera del PR */}
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-4">
               <div className="flex items-center gap-3">
                 <img
@@ -209,7 +183,6 @@ export function EvaluadorPRsPage() {
               </div>
             </div>
 
-            {/* Guardián de Rutas + archivos prohibidos */}
             {guardian && (
               <div className="flex flex-wrap items-center gap-2">
                 {guardian.permitido ? (
@@ -234,7 +207,6 @@ export function EvaluadorPRsPage() {
               </div>
             )}
 
-            {/* Descripción + Declaración de IA en Markdown */}
             {selectedPR.body && (
               <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)] p-4">
                 <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -246,53 +218,37 @@ export function EvaluadorPRsPage() {
               </div>
             )}
 
-            {/* Controles del diff */}
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  Diff limpio ({codeFiles.length} archivo(s))
+            {/* Resumen compacto de archivos tocados */}
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)] p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Archivos modificados ({codeFiles.length})
                 </h3>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Filtrar archivo..."
-                    value={fileFilter}
-                    onChange={(e) => setFileFilter(e.target.value)}
-                    className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-1 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]"
-                  />
-                  <Button variant="secondary" size="sm" onClick={() => setExpandAll((p) => !p)}>
-                    {expandAll ? 'Colapsar todos' : 'Expandir todos'}
-                  </Button>
-                </div>
+                <Link
+                  to={`/evaluador/${selectedPR.number}/diff`}
+                  className="text-xs font-medium text-[var(--text-primary)] underline underline-offset-2"
+                >
+                  Explorar diff completo →
+                </Link>
               </div>
 
               {filesQuery.isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-24 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                  <Spinner label="Cargando archivos modificados..." />
+                <div className="space-y-1.5 pt-1">
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-4/5" />
                 </div>
               ) : (
-                codeFiles.map((file) => (
-                  <details
-                    key={`${file.filename}-${expandAll}`}
-                    open={expandAll}
-                    className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-canvas)]"
-                  >
-                    <summary className="flex cursor-pointer items-center justify-between gap-2 bg-[var(--bg-surface)] px-3 py-2 text-xs">
-                      <span className="truncate font-mono font-medium text-[var(--text-primary)]">
-                        {file.filename}
+                <ul className="divide-y divide-[var(--border)] font-mono text-xs">
+                  {codeFiles.map((f) => (
+                    <li key={f.filename} className="flex items-center justify-between gap-2 py-1.5">
+                      <span className="truncate text-[var(--text-primary)]">{f.filename}</span>
+                      <span className="shrink-0 text-[11px]">
+                        <span className="text-[var(--status-ok-fg)]">+{f.additions}</span>{' '}
+                        <span className="text-[var(--status-err-fg)]">-{f.deletions}</span>
                       </span>
-                      <span className="shrink-0 font-mono text-[11px]">
-                        <span className="text-[var(--status-ok-fg)]">+{file.additions}</span>{' '}
-                        <span className="text-[var(--status-err-fg)]">-{file.deletions}</span>
-                      </span>
-                    </summary>
-                    <div className="overflow-x-auto border-t border-[var(--border)] py-1">
-                      {renderDiffLines(file.patch!)}
-                    </div>
-                  </details>
-                ))
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </>
