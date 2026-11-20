@@ -45,7 +45,7 @@ export function LoginPage() {
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
           options: {
@@ -56,6 +56,10 @@ export function LoginPage() {
           },
         });
         if (error) throw error;
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          setErrorMsg('Ese correo ya está registrado. Iniciá sesión con tu contraseña.');
+          return;
+        }
         setInfoMsg(
           'Cuenta creada y vinculada automáticamente. Si tenés confirmación por correo activa en Supabase, revisá tu bandeja; si no, ya podés iniciar sesión.',
         );
