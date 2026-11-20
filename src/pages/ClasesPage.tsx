@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown,
   ChevronRight,
+  Download,
   ExternalLink,
   FileText,
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  Presentation,
   Unlock,
+  X,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -90,6 +93,15 @@ export function ClasesPage() {
   const [selectedClaseNum, setSelectedClaseNum] = useState<number>(0);
   const [selectedDocPath, setSelectedDocPath] = useState<string | null>(null);
   const [previewClases, setPreviewClases] = useState<Clase[]>(PREVIEW_CLASES);
+  const [activeHtmlPath, setActiveHtmlPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setActiveHtmlPath(null);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
@@ -136,6 +148,22 @@ export function ClasesPage() {
     queryFn: () => fetchMarkdownFile(activeGithubPath!),
     enabled: isGitHubConfigured && Boolean(activeGithubPath),
   });
+
+  const claseFilesQuery = useQuery({
+    queryKey: ['github', 'clase-files', selectedClase?.carpeta_repo],
+    queryFn: () => listRepoPath(selectedClase!.carpeta_repo),
+    enabled: isGitHubConfigured && !selectedDocPath && Boolean(selectedClase && canReadSelectedClase),
+  });
+
+  const htmlPresentationQuery = useQuery({
+    queryKey: ['github', 'html-presentation', activeHtmlPath],
+    queryFn: () => fetchMarkdownFile(activeHtmlPath!),
+    enabled: isGitHubConfigured && Boolean(activeHtmlPath),
+  });
+
+  const adjuntos = (claseFilesQuery.data ?? []).filter(
+    (item) => item.type === 'file' && item.name.toLowerCase() !== 'consigna.md',
+  );
 
   const toggleDesbloqueoMutation = useMutation({
     mutationFn: async ({ id, desbloqueada }: { id: number; desbloqueada: boolean }) => {
@@ -519,6 +547,53 @@ export function ClasesPage() {
                 </article>
               )}
 
+              {/* Materiales adjuntos de la clase (presentaciones HTML, datasets, etc.) */}
+              {!isLockedForViewer && isGitHubConfigured && (claseFilesQuery.isLoading || adjuntos.length > 0) && (
+                <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    Materiales de la clase
+                  </p>
+                  {claseFilesQuery.isLoading ? (
+                    <div className="flex gap-2">
+                      <Skeleton className="h-9 w-44" />
+                      <Skeleton className="h-9 w-36" />
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2.5">
+                      {adjuntos.map((file) => {
+                        const isHtml = file.name.toLowerCase().endsWith('.html');
+                        if (isHtml) {
+                          return (
+                            <Button
+                              key={file.path}
+                              variant="primary"
+                              size="sm"
+                              onClick={() => setActiveHtmlPath(file.path)}
+                            >
+                              <Presentation className="h-3.5 w-3.5" />
+                              Abrir {file.name.replace(/\.html$/i, '')}
+                            </Button>
+                          );
+                        }
+                        return (
+                          <a
+                            key={file.path}
+                            href={file.download_url ?? file.html_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <Button variant="secondary" size="sm">
+                              <Download className="h-3.5 w-3.5" />
+                              {file.name}
+                            </Button>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Acción primaria sobria al pie */}
               {!isLockedForViewer && (
                 <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-6">
@@ -545,6 +620,37 @@ export function ClasesPage() {
           ) : null}
         </div>
       </section>
+
+      {/* Visor modal de presentación HTML interactiva */}
+      {activeHtmlPath && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg-canvas)]">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-surface)] px-4">
+            <span className="font-mono text-xs text-[var(--text-secondary)]">{activeHtmlPath}</span>
+            <Button variant="secondary" size="sm" onClick={() => setActiveHtmlPath(null)}>
+              <X className="h-3.5 w-3.5" />
+              Cerrar (Esc)
+            </Button>
+          </div>
+          <div className="flex-1">
+            {htmlPresentationQuery.isLoading ? (
+              <div className="flex h-full items-center justify-center">
+                <Spinner label="Cargando presentación interactiva..." />
+              </div>
+            ) : htmlPresentationQuery.isError ? (
+              <div className="flex h-full items-center justify-center p-6 text-sm text-[var(--status-err-fg)]">
+                {(htmlPresentationQuery.error as Error).message}
+              </div>
+            ) : (
+              <iframe
+                title={activeHtmlPath}
+                srcDoc={htmlPresentationQuery.data ?? ''}
+                sandbox="allow-scripts"
+                className="h-full w-full border-0"
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
