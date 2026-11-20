@@ -8,6 +8,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { formatAppError, parseAppError } from '../lib/errors';
 import { githubConfig, isGitHubConfigured } from '../lib/github';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { safeExternalUrl } from '../lib/url';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import type { Entrega, Examen } from '../types/database';
@@ -216,9 +217,9 @@ export function PerfilPage() {
               {perfil.mvp_titulo ?? 'Proyecto sin título'}
             </p>
             <div className="flex flex-wrap gap-4 text-xs">
-              {perfil.mvp_url && (
+              {safeExternalUrl(perfil.mvp_url) && (
                 <a
-                  href={perfil.mvp_url}
+                  href={safeExternalUrl(perfil.mvp_url)!}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 underline underline-offset-2"
@@ -226,9 +227,9 @@ export function PerfilPage() {
                   App en producción <ExternalLink className="h-3 w-3" />
                 </a>
               )}
-              {perfil.mvp_repo_url && (
+              {safeExternalUrl(perfil.mvp_repo_url) && (
                 <a
-                  href={perfil.mvp_repo_url}
+                  href={safeExternalUrl(perfil.mvp_repo_url)!}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"

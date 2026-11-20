@@ -176,7 +176,7 @@ export async function fetchMarkdownFile(path: string): Promise<string> {
 
   const rawUrl = `${GITHUB_RAW}/${githubConfig.owner}/${githubConfig.repo}/${githubConfig.branch}/${cleanPath}`;
   try {
-    const res = await fetch(rawUrl);
+    const res = await fetch(rawUrl, { cache: 'no-store' });
     if (!res.ok) {
       throw new GitHubApiError(res.status, `No se pudo descargar ${cleanPath} (${res.status})`);
     }

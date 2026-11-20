@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { formatAppError, parseAppError } from '../lib/errors';
+import { queryClient } from '../lib/queryClient';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { Alumno } from '../types/database';
 
@@ -70,6 +71,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (supabase) {
       await supabase.auth.signOut();
     }
+    queryClient.clear();
     set({ user: null, perfil: null, perfilLoading: false, perfilError: null, loading: false });
   },
 

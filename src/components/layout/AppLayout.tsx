@@ -37,15 +37,18 @@ export function AppLayout() {
     <div className="flex min-h-screen flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)]">
       <header className="sticky top-0 z-30 h-14 border-b border-[var(--border)] bg-[var(--bg-canvas)]/95 backdrop-blur">
         <div className="flex h-full items-center justify-between gap-4 px-4 md:px-6">
-          <div className="flex items-center gap-8">
+          <div className="flex min-w-0 flex-1 items-center gap-4 md:gap-8">
             <Link
               to="/"
-              className="text-sm font-semibold tracking-tight text-[var(--text-primary)]"
+              className="shrink-0 text-sm font-semibold tracking-tight text-[var(--text-primary)]"
             >
               {BRAND_NAME}
             </Link>
 
-            <nav className="flex items-center gap-1" aria-label="Navegación principal">
+            <nav
+              className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap"
+              aria-label="Navegación principal"
+            >
               {navItems
                 .filter((item) => item.visible)
                 .map(({ to, label, end }) => (

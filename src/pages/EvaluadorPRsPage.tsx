@@ -28,7 +28,7 @@ const IGNORED_FILES = new Set(['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock
 
 export function EvaluadorPRsPage() {
   const queryClient = useQueryClient();
-  const [selectedPR, setSelectedPR] = useState<GitHubPullRequest | null>(null);
+  const [selectedPRNumber, setSelectedPRNumber] = useState<number | null>(null);
 
   function handleRefreshPRs() {
     clearGitHubCache('pr');
@@ -45,6 +45,11 @@ export function EvaluadorPRsPage() {
     queryFn: listOpenPullRequests,
     enabled: isGitHubConfigured,
   });
+
+  const selectedPR: GitHubPullRequest | null = useMemo(
+    () => (prsQuery.data ?? []).find((pr) => pr.number === selectedPRNumber) ?? null,
+    [prsQuery.data, selectedPRNumber],
+  );
 
   const filesQuery = useQuery({
     queryKey: ['github', 'pr-files', selectedPR?.number],
@@ -157,7 +162,7 @@ export function EvaluadorPRsPage() {
               <li key={pr.number}>
                 <button
                   type="button"
-                  onClick={() => setSelectedPR(pr)}
+                  onClick={() => setSelectedPRNumber(pr.number)}
                   className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition ${
                     active
                       ? 'border-[var(--text-primary)] bg-[var(--bg-canvas)]'

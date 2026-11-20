@@ -7,7 +7,7 @@ import { formatAppError, parseAppError, type AppError } from '../lib/errors';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 
-type ModoAuth = 'login' | 'registro';
+type ModoAuth = 'login' | 'registro' | 'recuperar';
 
 interface FieldErrors {
   nombre?: string;
@@ -82,10 +82,12 @@ export function LoginPage() {
       errors.email = 'Ingresá un correo electrónico válido.';
     }
 
-    if (!password) {
-      errors.password = 'La contraseña es obligatoria.';
-    } else if (password.length < 6) {
-      errors.password = 'Mínimo 6 caracteres.';
+    if (modo !== 'recuperar') {
+      if (!password) {
+        errors.password = 'La contraseña es obligatoria.';
+      } else if (password.length < 6) {
+        errors.password = 'Mínimo 6 caracteres.';
+      }
     }
 
     return errors;
@@ -136,6 +138,16 @@ export function LoginPage() {
         });
         if (error) throw error;
         setFailedAttempts(0);
+      } else if (modo === 'recuperar') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+          redirectTo: `${window.location.origin}/perfil`,
+        });
+        if (error) throw error;
+        setFailedAttempts(0);
+        setInfoMsg(
+          'Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña. Revisá tu bandeja de entrada o spam.',
+        );
+        setModo('login');
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
@@ -158,7 +170,7 @@ export function LoginPage() {
         }
         setFailedAttempts(0);
         setInfoMsg(
-          'Cuenta creada y vinculada automáticamente. Si tenés confirmación por correo activa en Supabase, revisá tu bandeja; si no, ya podés iniciar sesión.',
+          '¡Cuenta creada! Revisá tu correo si te pide confirmación, o iniciá sesión directamente con tu contraseña.',
         );
         setModo('login');
       }
@@ -176,12 +188,18 @@ export function LoginPage() {
           {BRAND_NAME}
         </p>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--text-primary)]">
-          {modo === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+          {modo === 'login'
+            ? 'Iniciar sesión'
+            : modo === 'registro'
+              ? 'Crear cuenta'
+              : 'Recuperar contraseña'}
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
           {modo === 'login'
             ? 'Ingresá con tu correo y contraseña.'
-            : 'Los campos marcados con * son obligatorios.'}
+            : modo === 'registro'
+              ? 'Los campos marcados con * son obligatorios.'
+              : 'Ingresá tu correo y te enviamos un enlace para cambiar tu contraseña.'}
         </p>
 
         {!isSupabaseConfigured && (
@@ -231,20 +249,25 @@ export function LoginPage() {
                 error={fieldErrors.nombre}
               />
 
-              <FormInput
-                id="github"
-                label="Usuario de GitHub"
-                required
-                showCount
-                maxLength={39}
-                value={githubUsername}
-                onChange={(e) => {
-                  setGithubUsername(e.target.value);
-                  setFieldErrors((p) => ({ ...p, githubUsername: undefined }));
-                }}
-                placeholder="tu-usuario-github"
-                error={fieldErrors.githubUsername}
-              />
+              <div>
+                <FormInput
+                  id="github"
+                  label="Usuario de GitHub"
+                  required
+                  showCount
+                  maxLength={39}
+                  value={githubUsername}
+                  onChange={(e) => {
+                    setGithubUsername(e.target.value);
+                    setFieldErrors((p) => ({ ...p, githubUsername: undefined }));
+                  }}
+                  placeholder="tu-usuario-github"
+                  error={fieldErrors.githubUsername}
+                />
+                <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                  Tiene que coincidir exactamente con tu cuenta de GitHub (se usa para tus entregas).
+                </p>
+              </div>
             </>
           )}
 
@@ -263,20 +286,39 @@ export function LoginPage() {
             error={fieldErrors.email}
           />
 
-          <FormInput
-            id="password"
-            label="Contraseña"
-            type="password"
-            required
-            maxLength={72}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setFieldErrors((p) => ({ ...p, password: undefined }));
-            }}
-            placeholder="Mínimo 6 caracteres"
-            error={fieldErrors.password}
-          />
+          {modo !== 'recuperar' && (
+            <FormInput
+              id="password"
+              label="Contraseña"
+              type="password"
+              required
+              maxLength={72}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setFieldErrors((p) => ({ ...p, password: undefined }));
+              }}
+              placeholder="Mínimo 6 caracteres"
+              error={fieldErrors.password}
+            />
+          )}
+
+          {modo === 'login' && (
+            <div className="-mt-2 text-right">
+              <button
+                type="button"
+                onClick={() => {
+                  setModo('recuperar');
+                  setAppError(null);
+                  setInfoMsg(null);
+                  setFieldErrors({});
+                }}
+                className="text-xs text-[var(--text-secondary)] underline underline-offset-2 hover:text-[var(--text-primary)]"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+          )}
 
           <Button
             type="submit"
@@ -290,7 +332,9 @@ export function LoginPage() {
                 ? `Esperá ${cooldownLeft}s...`
                 : modo === 'login'
                   ? 'Entrar al Campus'
-                  : 'Crear cuenta'}
+                  : modo === 'registro'
+                    ? 'Crear cuenta'
+                    : 'Enviar enlace de recuperación'}
           </Button>
         </form>
 

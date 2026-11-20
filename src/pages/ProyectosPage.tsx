@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ExternalLink } from 'lucide-react';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { safeExternalUrl } from '../lib/url';
 import type { ProyectoCohorte } from '../types/database';
 
 export function ProyectosPage() {
@@ -57,9 +58,9 @@ export function ProyectosPage() {
               {proyecto.nombre} (@{proyecto.github_username})
             </p>
             <div className="mt-4 flex gap-4 text-xs font-medium">
-              {proyecto.mvp_url && (
+              {safeExternalUrl(proyecto.mvp_url) && (
                 <a
-                  href={proyecto.mvp_url}
+                  href={safeExternalUrl(proyecto.mvp_url)!}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-[var(--text-primary)] underline underline-offset-2"
@@ -67,9 +68,9 @@ export function ProyectosPage() {
                   Ver App <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               )}
-              {proyecto.mvp_repo_url && (
+              {safeExternalUrl(proyecto.mvp_repo_url) && (
                 <a
-                  href={proyecto.mvp_repo_url}
+                  href={safeExternalUrl(proyecto.mvp_repo_url)!}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"

@@ -55,11 +55,18 @@ const PREVIEW_CLASES: Clase[] = [
   { id: 13, numero: 12, titulo: 'Semana 12 — Examen Final y Defensa del MVP', fase: 3, carpeta_repo: 'clases/semana-12', fecha_programada: null, duracion_hs: 2, modalidad: 'Examen', link_llamada: null, estado: 'programada', desbloqueada: false, nota_cambio: null, gcal_event_id: null },
 ];
 
+const DOC_LABELS: Record<string, string> = {
+  'programa-oficial.md': 'Programa Oficial',
+  'instalacion.md': 'Guía de Instalación',
+  'flujo-entregas.md': 'Flujo de Entregas (PR)',
+  'diccionario-industria.md': 'Diccionario de la Industria',
+};
+
 const PREVIEW_DOCS = [
   { name: 'programa-oficial.md', label: 'Programa Oficial', path: 'docs/programa-oficial.md' },
   { name: 'instalacion.md', label: 'Guía de Instalación', path: 'docs/instalacion.md' },
   { name: 'flujo-entregas.md', label: 'Flujo de Entregas (PR)', path: 'docs/flujo-entregas.md' },
-  { name: 'diccionario-industria.md', label: 'Diccionario', path: 'docs/diccionario-industria.md' },
+  { name: 'diccionario-industria.md', label: 'Diccionario de la Industria', path: 'docs/diccionario-industria.md' },
 ];
 
 const PREVIEW_CLASE_0_MD = `# Clase 0 — Entrada en Calor (HTML + CSS + Primer Pull Request)
@@ -201,7 +208,7 @@ export function ClasesPage() {
     isGitHubConfigured && (docsQuery.data?.length ?? 0) > 0
       ? docsQuery.data!.map((d) => ({
           name: d.name,
-          label: d.name.replace(/\.md$/i, '').replace(/-/g, ' '),
+          label: DOC_LABELS[d.name.toLowerCase()] ?? d.name.replace(/\.md$/i, '').replace(/-/g, ' '),
           path: d.path,
         }))
       : PREVIEW_DOCS;
@@ -680,7 +687,10 @@ export function ClasesPage() {
                                 onClick={() => setActiveHtmlPath(file.path)}
                               >
                                 <Presentation className="h-3.5 w-3.5" />
-                                Abrir {file.name.replace(/\.html$/i, '')}
+                                Abrir{' '}
+                                {file.name.toLowerCase() === 'presentacion.html'
+                                  ? 'presentación'
+                                  : file.name.replace(/\.html$/i, '')}
                               </Button>
                               <Button
                                 variant="secondary"
