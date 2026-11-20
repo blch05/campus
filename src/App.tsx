@@ -8,6 +8,7 @@ import { HomePage } from './pages/HomePage';
 import { LibretaPage } from './pages/LibretaPage';
 import { LoginPage } from './pages/LoginPage';
 import { PerfilPage } from './pages/PerfilPage';
+import { PRDiffPage } from './pages/PRDiffPage';
 import { ProyectosPage } from './pages/ProyectosPage';
 
 export function App() {
@@ -31,6 +32,14 @@ export function App() {
             element={
               <ProtectedRoute requireStaff>
                 <EvaluadorPRsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="evaluador/:prNumber/diff"
+            element={
+              <ProtectedRoute requireStaff>
+                <PRDiffPage />
               </ProtectedRoute>
             }
           />

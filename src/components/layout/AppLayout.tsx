@@ -22,7 +22,8 @@ export function AppLayout() {
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   const showStaffNav = !isSupabaseConfigured || esStaff();
-  const isFullBleedPage = location.pathname.startsWith('/clases');
+  const isFullBleedPage =
+    location.pathname.startsWith('/clases') || location.pathname.endsWith('/diff');
 
   const navItems = [
     { to: '/', label: 'Inicio', end: true, visible: true },

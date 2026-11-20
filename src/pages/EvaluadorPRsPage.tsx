@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ExternalLink, FileCode2, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, ExternalLink, FileCode2, Maximize2, ShieldAlert } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Badge } from '../components/ui/Badge';
@@ -193,11 +194,19 @@ export function EvaluadorPRsPage() {
                 </div>
               </div>
 
-              <a href={selectedPR.html_url} target="_blank" rel="noreferrer">
-                <Button variant="secondary" size="sm">
-                  Abrir en GitHub <ExternalLink className="h-3.5 w-3.5" />
-                </Button>
-              </a>
+              <div className="flex items-center gap-2">
+                <Link to={`/evaluador/${selectedPR.number}/diff`}>
+                  <Button variant="primary" size="sm">
+                    <Maximize2 className="h-3.5 w-3.5" />
+                    Ver diff completo
+                  </Button>
+                </Link>
+                <a href={selectedPR.html_url} target="_blank" rel="noreferrer">
+                  <Button variant="secondary" size="sm">
+                    GitHub <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </a>
+              </div>
             </div>
 
             {/* Guardián de Rutas + archivos prohibidos */}

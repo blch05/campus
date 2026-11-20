@@ -59,6 +59,12 @@ export function listOpenPullRequests(): Promise<GitHubPullRequest[]> {
   );
 }
 
+export function getPullRequest(prNumber: number): Promise<GitHubPullRequest> {
+  return fetchGitHub<GitHubPullRequest>(
+    `/repos/${githubConfig.owner}/${githubConfig.repo}/pulls/${prNumber}`,
+  );
+}
+
 export function listPullRequestFiles(prNumber: number): Promise<GitHubPullRequestFile[]> {
   return fetchGitHub<GitHubPullRequestFile[]>(
     `/repos/${githubConfig.owner}/${githubConfig.repo}/pulls/${prNumber}/files?per_page=100`,
