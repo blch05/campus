@@ -7,7 +7,7 @@ Aplicación web modular y reutilizable (React + TypeScript + Tailwind CSS + TanS
 1. **Autenticación y Roles (`/login`):** Login y registro con Supabase Auth + vinculación automática por email (`trigger` en `auth.users`). Soporta `rol` (`estudiante` | `profesor`) y el permiso booleano independiente `es_admin`.
 2. **Portal de Clases y Docs con Desbloqueo Progresivo (`/clases`):** Lee `clases/` y `docs/` desde el repositorio configurado (`VITE_GITHUB_OWNER`/`VITE_GITHUB_REPO`). Las clases se desbloquean semana a semana desde Supabase (`clases.desbloqueada`); los estudiantes solo abren en el Campus las clases habilitadas y pueden investigar el resto en GitHub.
 3. **Evaluador de PRs (`/evaluador`, solo profesores/admins):** Lista los Pull Requests abiertos de la cohorte, valida el **Guardián de Rutas** (`entregas/<autor>/`), muestra la declaración de uso de IA y filtra el diff limpio del código modificado.
-4. **Libreta de Notas (`/libreta`):** Gestión de alumnos, entregas semanales y exámenes eliminatorios (30 % oral / 40 % live coding / 30 % entregable, nota mínima `>= 7`).
+4. **Libreta de Notas (`/libreta`):** Gestión de alumnos, entregas semanales y exámenes eliminatorios (30 % oral / 40 % pseudocódigo tipado / 30 % entregable, nota mínima `>= 7`).
 5. **Proyectos de la Cohorte (`/proyectos`, solo logueados):** Galería privada de los MVPs desplegados por los egresados (`public.proyectos_cohorte`), preparada para dominio propio futuro (`VITE_CUSTOM_DOMAIN`).
 
 ## Configuración local

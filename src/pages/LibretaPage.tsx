@@ -554,7 +554,7 @@ export function LibretaPage() {
                 step="0.5"
                 min="0"
                 max="10"
-                placeholder="Live 40%"
+                placeholder="Pseudocódigo 40%"
                 value={exLive}
                 onChange={(e) => setExLive(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
@@ -606,7 +606,7 @@ export function LibretaPage() {
                   {esStaff && <th className="px-4 py-3">Estudiante</th>}
                   <th className="px-4 py-3">Hito</th>
                   <th className="px-4 py-3">Oral (30%)</th>
-                  <th className="px-4 py-3">Live (40%)</th>
+                  <th className="px-4 py-3">Pseudocódigo (40%)</th>
                   <th className="px-4 py-3">Entregable (30%)</th>
                   <th className="px-4 py-3">Final</th>
                   <th className="px-4 py-3">Estado</th>

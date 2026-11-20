@@ -69,7 +69,7 @@ create table if not exists public.entregas (
   unique (alumno_id, clase_numero)
 );
 
--- 4. Exámenes eliminatorios (Hitos 1, 2 y 3 — 30% oral, 40% live coding, 30% entregable)
+-- 4. Exámenes eliminatorios (Hitos 1, 2 y 3 — 30% oral, 40% pseudocódigo tipado en vivo, 30% entregable)
 create table if not exists public.examenes (
   id uuid primary key default gen_random_uuid(),
   alumno_id uuid not null references public.alumnos(id) on delete cascade,
