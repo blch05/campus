@@ -1,13 +1,39 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Calendar, ExternalLink, Video } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import { BRAND_NAME } from '../lib/brand';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { safeExternalUrl } from '../lib/url';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Clase, Entrega, Examen } from '../types/database';
+
+function pickProximaClase(clases: Clase[]): Clase | null {
+  const activas = clases.filter(
+    (c) => (c.estado === 'programada' || c.estado === 'reprogramada') && Boolean(c.fecha_programada),
+  );
+  if (activas.length === 0) return null;
+
+  const cutoff = Date.now() - 3 * 60 * 60 * 1000; // mantiene el banner hasta 3 hs después del inicio
+  const ordenadas = [...activas].sort(
+    (a, b) => new Date(a.fecha_programada!).getTime() - new Date(b.fecha_programada!).getTime(),
+  );
+  return ordenadas.find((c) => new Date(c.fecha_programada!).getTime() >= cutoff) ?? ordenadas[0];
+}
+
+function formatFechaProxima(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export function HomePage() {
   const perfil = useAuthStore((s) => s.perfil);
@@ -48,6 +74,8 @@ export function HomePage() {
   });
 
   const clases = clasesQuery.data ?? [];
+  const proximaClase = pickProximaClase(clases);
+  const proximaLink = safeExternalUrl(proximaClase?.link_llamada);
   const totalClases = clases.length || 13;
   const desbloqueadas = clases.filter((c) => c.desbloqueada).length;
   const pctProgreso = Math.round((desbloqueadas / totalClases) * 100);
@@ -127,6 +155,64 @@ export function HomePage() {
           </Link>
         </div>
       </div>
+
+      {/* Banner de Próxima Clase */}
+      {!clasesQuery.isLoading && proximaClase && proximaClase.fecha_programada && (
+        <div className="flex flex-col justify-between gap-4 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] p-5 sm:flex-row sm:items-center">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={proximaClase.estado === 'reprogramada' ? 'warning' : 'success'}>
+                {proximaClase.estado === 'reprogramada' ? 'Reprogramada' : 'Próxima clase'}
+              </Badge>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium capitalize text-[var(--text-secondary)]">
+                <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                {formatFechaProxima(proximaClase.fecha_programada)} hs
+              </span>
+              {proximaClase.modalidad && (
+                <span className="text-xs text-[var(--text-muted)]">· {proximaClase.modalidad}</span>
+              )}
+            </div>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+              {proximaClase.titulo}
+            </h2>
+            {proximaClase.nota_cambio && (
+              <p className="text-xs text-[var(--text-secondary)]">{proximaClase.nota_cambio}</p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {proximaLink && (
+              <a href={proximaLink} target="_blank" rel="noreferrer">
+                <Button variant="primary" size="sm">
+                  <Video className="h-3.5 w-3.5" />
+                  Unirse a la llamada
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+              </a>
+            )}
+            <Link to="/clases">
+              <Button variant="secondary" size="sm">
+                Ver consigna
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!clasesQuery.isLoading && !proximaClase && esStaff && isSupabaseConfigured && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-surface)] px-5 py-3.5 text-xs text-[var(--text-secondary)]">
+          <span className="inline-flex items-center gap-2">
+            <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+            Todavía no hay fecha programada para la próxima clase.
+          </span>
+          <Link
+            to="/libreta?tab=cronograma"
+            className="font-medium text-[var(--text-primary)] underline underline-offset-2"
+          >
+            Programar en Cronograma
+          </Link>
+        </div>
+      )}
 
       {/* Barra de progreso + métricas de TPs y Exámenes */}
       <div className="grid gap-4 sm:grid-cols-3">

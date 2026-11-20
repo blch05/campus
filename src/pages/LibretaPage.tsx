@@ -1,17 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, Plus, Unlock } from 'lucide-react';
+import { Calendar, ExternalLink, Lock, Plus, Unlock, Video, X } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Skeleton, Spinner } from '../components/ui/Skeleton';
 import { formatAppError, parseAppError } from '../lib/errors';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { safeExternalUrl } from '../lib/url';
 import { useAuthStore } from '../store/useAuthStore';
 import type {
   Alumno,
   Clase,
   Entrega,
+  EstadoClase,
   EstadoEntrega,
   EstadoExamen,
   Examen,
@@ -37,6 +39,34 @@ const ESTADO_EXAMEN_BADGE: Record<EstadoExamen, 'neutral' | 'success' | 'warning
 };
 
 const VALID_TABS: TabLibreta[] = ['cronograma', 'entregas', 'examenes', 'alumnos'];
+
+const ESTADO_CLASE_BADGE: Record<EstadoClase, 'neutral' | 'success' | 'warning' | 'error'> = {
+  programada: 'neutral',
+  reprogramada: 'warning',
+  dictada: 'success',
+  cancelada: 'error',
+};
+
+function toDateTimeLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatClaseFecha(iso: string | null): string {
+  if (!iso) return 'Sin fecha';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Sin fecha';
+  return d.toLocaleString('es-AR', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export function LibretaPage() {
   const queryClient = useQueryClient();
@@ -76,6 +106,15 @@ export function LibretaPage() {
   const [exEntregable, setExEntregable] = useState('');
   const [exRecup, setExRecup] = useState(false);
   const [exObs, setExObs] = useState('');
+
+  // Form: programar/editar clase (staff)
+  const [editClaseId, setEditClaseId] = useState<number | null>(null);
+  const [editClaseTitulo, setEditClaseTitulo] = useState('');
+  const [editFecha, setEditFecha] = useState('');
+  const [editLink, setEditLink] = useState('');
+  const [editModalidad, setEditModalidad] = useState('');
+  const [editEstadoClase, setEditEstadoClase] = useState<EstadoClase>('programada');
+  const [editNotaCambio, setEditNotaCambio] = useState('');
 
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
@@ -143,6 +182,53 @@ export function LibretaPage() {
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'clases'] });
     },
   });
+
+  const updateClaseScheduleMutation = useMutation({
+    mutationFn: async () => {
+      if (editClaseId === null) throw new Error('Ninguna clase seleccionada.');
+      const trimmedLink = editLink.trim();
+      if (trimmedLink && !safeExternalUrl(trimmedLink)) {
+        throw new Error('El link de la llamada debe empezar con https:// o http://.');
+      }
+      const isoFecha = editFecha ? new Date(editFecha).toISOString() : null;
+      const { error } = await supabase!
+        .from('clases')
+        .update({
+          fecha_programada: isoFecha,
+          link_llamada: trimmedLink || null,
+          modalidad: editModalidad.trim() || null,
+          estado: editEstadoClase,
+          nota_cambio: editNotaCambio.trim() || null,
+        })
+        .eq('id', editClaseId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditClaseId(null);
+      setFeedback({ type: 'ok', text: 'Cronograma de la clase actualizado.' });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'clases'] });
+    },
+    onError: (err) => {
+      setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) });
+    },
+  });
+
+  function openEditClase(clase: Clase) {
+    setFeedback(null);
+    setEditClaseId(clase.id);
+    setEditClaseTitulo(clase.titulo);
+    setEditFecha(toDateTimeLocalInput(clase.fecha_programada));
+    setEditLink(clase.link_llamada ?? '');
+    setEditModalidad(clase.modalidad ?? '2 hs (Compacto)');
+    setEditEstadoClase(clase.estado);
+    setEditNotaCambio(clase.nota_cambio ?? '');
+  }
+
+  function handleSaveClaseSchedule(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFeedback(null);
+    updateClaseScheduleMutation.mutate();
+  }
 
   const createAlumnoMutation = useMutation({
     mutationFn: async () => {
@@ -318,72 +404,225 @@ export function LibretaPage() {
 
       {/* TAB 1: CRONOGRAMA */}
       {tab === 'cronograma' && (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-[var(--border)] bg-[var(--bg-canvas)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
-              <tr>
-                <th className="px-4 py-3">#</th>
-                <th className="px-4 py-3">Clase / Semana</th>
-                <th className="px-4 py-3">Fase</th>
-                <th className="px-4 py-3">Acceso</th>
-                {esStaff && <th className="px-4 py-3 text-right">Acción</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {clasesQuery.isLoading ? (
+        <div className="space-y-4">
+          {esStaff && editClaseId !== null && (
+            <form
+              onSubmit={handleSaveClaseSchedule}
+              className="space-y-4 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] p-5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+                    Programar clase
+                  </p>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                    {editClaseTitulo}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditClaseId(null)}
+                  className="rounded-md p-1 text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                  aria-label="Cerrar editor de clase"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Fecha y hora</span>
+                  <input
+                    type="datetime-local"
+                    value={editFecha}
+                    onChange={(e) => setEditFecha(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)] lg:col-span-2">
+                  <span>Link de la llamada (Meet / Discord / Zoom)</span>
+                  <input
+                    type="url"
+                    placeholder="https://meet.google.com/..."
+                    value={editLink}
+                    onChange={(e) => setEditLink(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Estado</span>
+                  <select
+                    value={editEstadoClase}
+                    onChange={(e) => setEditEstadoClase(e.target.value as EstadoClase)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  >
+                    <option value="programada">Programada</option>
+                    <option value="reprogramada">Reprogramada</option>
+                    <option value="dictada">Dictada</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)]">
+                  <span>Modalidad</span>
+                  <input
+                    type="text"
+                    placeholder="Ej: 2 hs (Compacto)"
+                    value={editModalidad}
+                    onChange={(e) => setEditModalidad(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs text-[var(--text-secondary)] sm:col-span-2 lg:col-span-3">
+                  <span>Nota / aviso (opcional)</span>
+                  <input
+                    type="text"
+                    placeholder="Ej: Traer VS Code, Node y Git instalados"
+                    value={editNotaCambio}
+                    onChange={(e) => setEditNotaCambio(e.target.value)}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditClaseId(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={updateClaseScheduleMutation.isPending}
+                >
+                  {updateClaseScheduleMutation.isPending ? 'Guardando...' : 'Guardar horario'}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-[var(--border)] bg-[var(--bg-canvas)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
                 <tr>
-                  <td colSpan={esStaff ? 5 : 4} className="space-y-2 px-4 py-6">
-                    <Skeleton className="h-5 w-full" />
-                    <Skeleton className="h-5 w-11/12" />
-                    <Skeleton className="h-5 w-4/5" />
-                    <Spinner label="Cargando cronograma..." className="pt-1" />
-                  </td>
+                  <th className="px-4 py-3">#</th>
+                  <th className="px-4 py-3">Clase / Semana</th>
+                  <th className="px-4 py-3">Fecha y hora</th>
+                  <th className="px-4 py-3">Llamada</th>
+                  <th className="px-4 py-3">Acceso</th>
+                  {esStaff && <th className="px-4 py-3 text-right">Acciones</th>}
                 </tr>
-              ) : (
-                clasesQuery.data?.map((clase) => (
-                <tr key={clase.id}>
-                  <td className="px-4 py-3 font-mono text-[var(--text-muted)]">
-                    {String(clase.numero).padStart(2, '0')}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
-                    {clase.titulo}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--text-secondary)]">Fase {clase.fase}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={clase.desbloqueada ? 'success' : 'neutral'}>
-                      {clase.desbloqueada ? 'Desbloqueada' : 'Bloqueada'}
-                    </Badge>
-                  </td>
-                  {esStaff && (
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={toggleClaseMutation.isPending}
-                        onClick={() =>
-                          toggleClaseMutation.mutate({
-                            id: clase.id,
-                            desbloqueada: !clase.desbloqueada,
-                          })
-                        }
-                      >
-                        {clase.desbloqueada ? (
-                          <>
-                            <Lock className="h-3.5 w-3.5" /> Bloquear
-                          </>
-                        ) : (
-                          <>
-                            <Unlock className="h-3.5 w-3.5" /> Abrir
-                          </>
-                        )}
-                      </Button>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {clasesQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={esStaff ? 6 : 5} className="space-y-2 px-4 py-6">
+                      <Skeleton className="h-5 w-full" />
+                      <Skeleton className="h-5 w-11/12" />
+                      <Skeleton className="h-5 w-4/5" />
+                      <Spinner label="Cargando cronograma..." className="pt-1" />
                     </td>
-                  )}
-                </tr>
-              ))
-              )}
-            </tbody>
-          </table>
+                  </tr>
+                ) : (
+                  clasesQuery.data?.map((clase) => {
+                    const safeLink = safeExternalUrl(clase.link_llamada);
+                    return (
+                      <tr key={clase.id}>
+                        <td className="px-4 py-3 font-mono text-[var(--text-muted)]">
+                          {String(clase.numero).padStart(2, '0')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-[var(--text-primary)]">
+                            {clase.titulo}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                            <span>Fase {clase.fase}</span>
+                            {clase.modalidad && <span>· {clase.modalidad}</span>}
+                            {clase.estado !== 'programada' && (
+                              <Badge variant={ESTADO_CLASE_BADGE[clase.estado]}>
+                                {clase.estado}
+                              </Badge>
+                            )}
+                          </div>
+                          {clase.nota_cambio && (
+                            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                              {clase.nota_cambio}
+                            </p>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-secondary)]">
+                          {formatClaseFecha(clase.fecha_programada)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs">
+                          {safeLink ? (
+                            <a
+                              href={safeLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-medium text-[var(--text-primary)] underline underline-offset-2"
+                            >
+                              <Video className="h-3.5 w-3.5" />
+                              Unirse
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : (
+                            <span className="text-[var(--text-muted)]">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={clase.desbloqueada ? 'success' : 'neutral'}>
+                            {clase.desbloqueada ? 'Desbloqueada' : 'Bloqueada'}
+                          </Badge>
+                        </td>
+                        {esStaff && (
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openEditClase(clase)}
+                              >
+                                <Calendar className="h-3.5 w-3.5" /> Programar
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={toggleClaseMutation.isPending}
+                                onClick={() =>
+                                  toggleClaseMutation.mutate({
+                                    id: clase.id,
+                                    desbloqueada: !clase.desbloqueada,
+                                  })
+                                }
+                              >
+                                {clase.desbloqueada ? (
+                                  <>
+                                    <Lock className="h-3.5 w-3.5" /> Bloquear
+                                  </>
+                                ) : (
+                                  <>
+                                    <Unlock className="h-3.5 w-3.5" /> Abrir
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
