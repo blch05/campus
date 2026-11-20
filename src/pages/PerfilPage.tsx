@@ -68,7 +68,7 @@ export function PerfilPage() {
 
   const entregasFolderUrl =
     isGitHubConfigured && perfil
-      ? `https://github.com/${githubConfig.owner}/${githubConfig.repo}/tree/main/entregas/${perfil.github_username}`
+      ? `https://github.com/${githubConfig.owner}/${githubConfig.repo}/tree/${githubConfig.branch}/entregas/${perfil.github_username}`
       : null;
 
   async function handlePasswordUpdate(e: FormEvent) {
@@ -145,14 +145,18 @@ export function PerfilPage() {
             <div>
               <p className="text-xs text-[var(--text-muted)]">GitHub</p>
               <div className="mt-0.5 flex items-center gap-3">
-                <a
-                  href={perfil ? `https://github.com/${perfil.github_username}` : '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-mono text-xs text-[var(--text-primary)] underline underline-offset-2"
-                >
-                  @{perfil?.github_username ?? '—'} <ExternalLink className="h-3 w-3" />
-                </a>
+                {perfil ? (
+                  <a
+                    href={`https://github.com/${perfil.github_username}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-[var(--text-primary)] underline underline-offset-2"
+                  >
+                    @{perfil.github_username} <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-xs text-[var(--text-muted)]">—</span>
+                )}
                 {entregasFolderUrl && (
                   <a
                     href={entregasFolderUrl}

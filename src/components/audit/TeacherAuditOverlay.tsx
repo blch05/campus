@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Database, Play, Terminal, X } from 'lucide-react';
 import { fetchMarkdownFile, isGitHubConfigured } from '../../lib/github';
+import { safeExternalUrl } from '../../lib/url';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { SchemaVisualizer } from './SchemaVisualizer';
@@ -48,11 +49,12 @@ export function TeacherAuditOverlay() {
   }, []);
 
   async function runProbes() {
-    if (!baseUrl.trim()) return;
+    const safeBase = safeExternalUrl(baseUrl);
+    if (!safeBase) return;
     setRunning(true);
     setResults([]);
 
-    const target = `${baseUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+    const target = `${safeBase.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
     const probes: { caso: string; esperado: string; headers?: Record<string, string>; body?: string; okStatuses: number[] }[] = [
       {
         caso: 'Sin header Authorization',

@@ -14,7 +14,7 @@ import {
   Unlock,
   X,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -27,6 +27,7 @@ import {
   listRepoPath,
 } from '../lib/github';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { safeExternalUrl } from '../lib/url';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Clase } from '../types/database';
 
@@ -230,6 +231,44 @@ export function ClasesPage() {
   const repoUrl = isGitHubConfigured
     ? `https://github.com/${githubConfig.owner}/${githubConfig.repo}`
     : null;
+
+  const markdownComponents: Components = useMemo(
+    () => ({
+      a: ({ href, children, ...props }) => {
+        if (!href) return <a {...props}>{children}</a>;
+
+        const docMatch = href.match(/(?:^|\/)(docs\/[^#?]+\.md)/i);
+        if (docMatch) {
+          const docPath = docMatch[1];
+          return (
+            <button
+              type="button"
+              onClick={() => setSelectedDocPath(docPath)}
+              className="inline cursor-pointer font-medium text-[var(--text-primary)] underline underline-offset-3 hover:opacity-80"
+            >
+              {children}
+            </button>
+          );
+        }
+
+        const safeUrl = safeExternalUrl(href);
+        if (safeUrl) {
+          return (
+            <a href={safeUrl} target="_blank" rel="noreferrer" {...props}>
+              {children}
+            </a>
+          );
+        }
+
+        return (
+          <a href={href} {...props}>
+            {children}
+          </a>
+        );
+      },
+    }),
+    [],
+  );
 
   const docsList =
     isGitHubConfigured && (docsQuery.data?.length ?? 0) > 0
@@ -548,7 +587,7 @@ export function ClasesPage() {
                   )}
                   {repoUrl && (
                     <a
-                      href={`${repoUrl}/blob/main/${selectedDocPath}`}
+                      href={`${repoUrl}/blob/${githubConfig.branch}/${selectedDocPath}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -574,7 +613,7 @@ export function ClasesPage() {
                   </p>
                 ) : (
                   <article className="campus-prose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                       {markdownQuery.data ?? ''}
                     </ReactMarkdown>
                   </article>
@@ -667,7 +706,7 @@ export function ClasesPage() {
                   {repoUrl && (
                     <div className="pt-2">
                       <a
-                        href={`${repoUrl}/tree/main/${selectedClase.carpeta_repo}`}
+                        href={`${repoUrl}/tree/${githubConfig.branch}/${selectedClase.carpeta_repo}`}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -693,14 +732,14 @@ export function ClasesPage() {
                   </p>
                 ) : (
                   <article className="campus-prose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                       {markdownQuery.data ?? ''}
                     </ReactMarkdown>
                   </article>
                 )
               ) : (
                 <article className="campus-prose">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                     {selectedClase.numero === 0
                       ? PREVIEW_CLASE_0_MD
                       : `# ${selectedClase.titulo}\n\nVista previa local. Conectá \`VITE_GITHUB_OWNER\` y \`VITE_GITHUB_REPO\` en \`.env\` para cargar \`${selectedClase.carpeta_repo}/consigna.md\` desde GitHub.`}
@@ -794,7 +833,7 @@ export function ClasesPage() {
                   </Button>
                   {repoUrl && (
                     <a
-                      href={`${repoUrl}/tree/main/${selectedClase.carpeta_repo}`}
+                      href={`${repoUrl}/tree/${githubConfig.branch}/${selectedClase.carpeta_repo}`}
                       target="_blank"
                       rel="noreferrer"
                     >

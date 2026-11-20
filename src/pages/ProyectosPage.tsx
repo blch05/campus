@@ -100,7 +100,7 @@ export function ProyectosPage() {
                   <h3 className="text-base font-semibold text-[var(--text-primary)]">
                     {proyecto.mvp_titulo ?? 'Proyecto Integrador'}
                   </h3>
-                  <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-0.5 font-mono text-[11px] text-[var(--text-secondary)]">
+                  <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg-hover)] px-2 py-0.5 font-mono text-[11px] text-[var(--text-secondary)]">
                     MVP
                   </span>
                 </div>
@@ -178,7 +178,7 @@ export function ProyectosPage() {
         </div>
 
         {entregasQuery.isError && (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-600 dark:text-amber-300">
+          <div className="rounded-xl border border-[var(--status-warn-border)] bg-[var(--status-warn-bg)] p-4 text-sm text-[var(--status-warn-fg)]">
             No se pudieron cargar las entregas desde GitHub:{' '}
             {entregasQuery.error instanceof Error
               ? entregasQuery.error.message
@@ -214,7 +214,7 @@ export function ProyectosPage() {
                     <h3 className="text-base font-semibold text-[var(--text-primary)]">
                       {entrega.titulo}
                     </h3>
-                    <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-0.5 font-mono text-[11px] text-[var(--text-secondary)]">
+                    <span className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--bg-hover)] px-2 py-0.5 font-mono text-[11px] text-[var(--text-secondary)]">
                       {entrega.carpeta}
                     </span>
                   </div>

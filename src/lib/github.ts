@@ -335,6 +335,7 @@ export async function listEntregasProyectos(): Promise<EntregaProyectoGitHub[]> 
       const baseFolder = `entregas/${group.username}/${group.carpeta}`;
       const defaultRepoUrl = `https://github.com/${owner}/${repo}/tree/${branch}/${baseFolder}`;
       const hasMvpJson = group.files.some((f) => f.toLowerCase() === 'mvp.json');
+      const hasPackageJson = group.files.some((f) => f.toLowerCase() === 'package.json');
       const indexFile = group.files.find((f) => f.toLowerCase() === 'index.html');
 
       if (hasMvpJson) {
@@ -352,7 +353,7 @@ export async function listEntregasProyectos(): Promise<EntregaProyectoGitHub[]> 
         };
       }
 
-      if (indexFile) {
+      if (indexFile && !hasPackageJson) {
         const rawHtml = `${GITHUB_RAW}/${owner}/${repo}/${branch}/${baseFolder}/${indexFile}`;
         const htmlTitle = await extractHtmlTitle(rawHtml);
         return {

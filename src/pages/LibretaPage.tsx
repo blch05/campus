@@ -13,6 +13,7 @@ import type {
   Alumno,
   Clase,
   Entrega,
+  EstadoAlumno,
   EstadoClase,
   EstadoEntrega,
   EstadoExamen,
@@ -235,7 +236,7 @@ export function LibretaPage() {
       const { error } = await supabase!.from('alumnos').insert({
         nombre: newNombre.trim(),
         email: newEmail.trim().toLowerCase(),
-        github_username: newGithub.trim().toLowerCase(),
+        github_username: newGithub.trim().toLowerCase().replace(/^@/, ''),
         rol: newRol,
         es_admin: newEsAdmin,
       });
@@ -248,6 +249,18 @@ export function LibretaPage() {
       setNewRol('estudiante');
       setNewEsAdmin(false);
       setFeedback({ type: 'ok', text: 'Usuario agregado correctamente.' });
+      void queryClient.invalidateQueries({ queryKey: ['supabase', 'alumnos'] });
+    },
+    onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
+  });
+
+  const updateAlumnoEstadoMutation = useMutation({
+    mutationFn: async ({ id, estado }: { id: string; estado: EstadoAlumno }) => {
+      const { error } = await supabase!.from('alumnos').update({ estado }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setFeedback({ type: 'ok', text: 'Estado del usuario actualizado.' });
       void queryClient.invalidateQueries({ queryKey: ['supabase', 'alumnos'] });
     },
     onError: (err) => setFeedback({ type: 'error', text: formatAppError(parseAppError(err)) }),
@@ -662,6 +675,7 @@ export function LibretaPage() {
 
               <input
                 type="number"
+                min={1}
                 placeholder="PR #"
                 value={entPrNum}
                 onChange={(e) => setEntPrNum(e.target.value)}
@@ -824,7 +838,8 @@ export function LibretaPage() {
 
               <input
                 type="text"
-                placeholder="Observación / devolución..."
+                maxLength={300}
+                placeholder="Observación / devolución (máx. 300 caracteres)..."
                 value={exObs}
                 onChange={(e) => setExObs(e.target.value)}
                 className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2.5 py-2 text-xs text-[var(--text-primary)] sm:col-span-3"
@@ -861,12 +876,13 @@ export function LibretaPage() {
                   <th className="px-4 py-3">Entregable (30%)</th>
                   <th className="px-4 py-3">Final</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Observación</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {examenesQuery.isLoading ? (
                   <tr>
-                    <td colSpan={esStaff ? 7 : 6} className="space-y-2 px-4 py-6">
+                    <td colSpan={esStaff ? 8 : 7} className="space-y-2 px-4 py-6">
                       <Skeleton className="h-5 w-full" />
                       <Skeleton className="h-5 w-5/6" />
                       <Spinner label="Cargando exámenes..." className="pt-1" />
@@ -895,6 +911,9 @@ export function LibretaPage() {
                       <td className="px-4 py-3">
                         <Badge variant={ESTADO_EXAMEN_BADGE[ex.estado]}>{ex.estado}</Badge>
                       </td>
+                      <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
+                        {ex.observacion ?? '—'}
+                      </td>
                     </tr>
                   );
                 })
@@ -902,7 +921,7 @@ export function LibretaPage() {
                 {!examenesQuery.isLoading && (!examenesQuery.data || examenesQuery.data.length === 0) && (
                   <tr>
                     <td
-                      colSpan={esStaff ? 7 : 6}
+                      colSpan={esStaff ? 8 : 7}
                       className="px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
                     >
                       Todavía no hay exámenes cargados.
@@ -1012,7 +1031,28 @@ export function LibretaPage() {
                         {a.user_id ? 'Activo' : 'Pendiente registro'}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">{a.estado}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
+                      {esAdmin ? (
+                        <select
+                          aria-label={`Estado de ${a.nombre}`}
+                          value={a.estado}
+                          disabled={updateAlumnoEstadoMutation.isPending}
+                          onChange={(e) =>
+                            updateAlumnoEstadoMutation.mutate({
+                              id: a.id,
+                              estado: e.target.value as EstadoAlumno,
+                            })
+                          }
+                          className="rounded-md border border-[var(--border)] bg-[var(--bg-canvas)] px-2 py-1 text-xs text-[var(--text-primary)]"
+                        >
+                          <option value="activo">activo</option>
+                          <option value="atrasado">atrasado</option>
+                          <option value="baja">baja</option>
+                        </select>
+                      ) : (
+                        a.estado
+                      )}
+                    </td>
                   </tr>
                 ))
                 )}

@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { useAuthInit } from './hooks/useAuthInit';
@@ -47,6 +47,7 @@ export function App() {
           <Route path="proyectos" element={<ProyectosPage />} />
           <Route path="perfil" element={<PerfilPage />} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
