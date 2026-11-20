@@ -88,7 +88,11 @@ export function AppLayout() {
                     <Skeleton className="h-3 w-14" />
                   </div>
                 ) : (
-                  <div className="hidden items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs sm:flex">
+                  <Link
+                    to="/perfil"
+                    title="Ver mi perfil"
+                    className="hidden items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] sm:flex"
+                  >
                     <span className="font-medium text-[var(--text-primary)]">
                       {perfil?.nombre ?? user.email}
                     </span>
@@ -100,7 +104,7 @@ export function AppLayout() {
                         · <Shield className="h-3 w-3" /> Admin
                       </span>
                     )}
-                  </div>
+                  </Link>
                 )}
 
                 <Button variant="secondary" size="sm" onClick={() => void signOut()}>
